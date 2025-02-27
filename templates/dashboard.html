@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Dashboard</title>
+</head>
+<body>
+    <h2>Dashboard</h2>
+    <p>Welcome, {{ session['role'] }}!</p>
+
+    {% if session['role'] == 'admin' %}
+        <p><a href="{{ url_for('admin') }}">Go to Admin Panel</a></p>
+    {% endif %}
+
+    <p><a href="{{ url_for('timetable') }}">View Timetable</a></p>
+    <p><a href="{{ url_for('logout') }}">Logout</a></p>
+</body>
+</html>

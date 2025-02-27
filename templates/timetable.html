@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Timetable</title>
+</head>
+<body>
+    <h2>Timetable</h2>
+
+    <!-- Only show the form if the user is staff -->
+    {% if session['role'] == "staff" %}
+    <form method="post">
+        Date: <input type="date" name="date" required><br>
+        Time: <input type="time" name="time" required><br>
+        Subject: <input type="text" name="subject" required><br>
+        Location: <input type="text" name="location" required><br>
+        <button type="submit">Add Entry</button>
+    </form>
+    {% endif %}
+
+    <h3>Your Schedule</h3>
+    <ul>
+        {% for entry in timetable %}
+            <li>{{ entry.date }} {{ entry.time }} - {{ entry.subject }} ({{ entry.location }})
+                {% if session['role'] == "staff" %}
+                <form method="post" action="{{ url_for('delete_timetable', id=entry.id) }}">
+                    <button type="submit">Delete</button>
+                </form>
+                {% endif %}
+            </li>
+        {% endfor %}
+    </ul>
+
+    <p><a href="{{ url_for('dashboard') }}">Back to Dashboard</a></p>
+</body>
+</html>

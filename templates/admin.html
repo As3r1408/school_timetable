@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Admin Panel</title>
+</head>
+<body>
+    <h2>Admin Panel - Manage Users</h2>
+    
+    <h3>Create a New User</h3>
+    <form method="post">
+        Username: <input type="text" name="username" required><br>
+        Password: <input type="password" name="password" required><br>
+        Role: 
+        <select name="role">
+            <option value="student">Student</option>
+            <option value="staff">Staff</option>
+        </select><br>
+        <button type="submit">Create User</button>
+    </form>
+
+    <h3>Existing Users</h3>
+    <ul>
+        {% for user in users %}
+            <li>{{ user.username }} ({{ user.role }})</li>
+        {% endfor %}
+    </ul>
+
+    <p><a href="{{ url_for('dashboard') }}">Back to Dashboard</a></p>
+</body>
+</html>
