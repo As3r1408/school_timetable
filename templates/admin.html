@@ -39,6 +39,20 @@
         {% endfor %}
     </ul>
 
+    <form method="post">
+        <input type="hidden" name="action" value="toggle_week_ab">
+        <button type="submit">
+            {% if use_week_ab %}
+                Disable Week A/B System
+            {% else %}
+                Enable Week A/B System
+            {% endif %}
+        </button>
+    </form>
+
     <p><a href="{{ url_for('dashboard') }}">Back to Dashboard</a></p>
+
+    <p><a href="{{ url_for('admin_timetable') }}">Manage Timetables</a></p>
+
 </body>
 </html>

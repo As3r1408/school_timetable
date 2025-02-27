@@ -6,13 +6,16 @@
 <body>
     <h2>Timetable</h2>
 
-    <!-- Only show the form if the user is staff -->
+    {% if use_week_ab %}
+        <p>Current Week: <strong>Week {{ current_week_type }}</strong></p>
+    {% endif %}
+
     {% if session['role'] == "staff" %}
     <form method="post">
         Date: <input type="date" name="date" required><br>
         Time: <input type="time" name="time" required><br>
         Subject: <input type="text" name="subject" required><br>
-        Location: <input type="text" name="location" required><br>
+        Teacher: <input type="text" name="teacher" required><br>
         <button type="submit">Add Entry</button>
     </form>
     {% endif %}
@@ -20,7 +23,12 @@
     <h3>Your Schedule</h3>
     <ul>
         {% for entry in timetable %}
-            <li>{{ entry.date }} {{ entry.time }} - {{ entry.subject }} ({{ entry.location }})
+            <li>{{ entry.date }} ({{ entry.day }}) - 
+                {% if use_week_ab %}
+                    <strong>Week {{ entry.week_type }}</strong> - 
+                {% endif %}
+                {{ entry.subject }} ({{ entry.teacher }})
+                <br>Time: {{ entry.start_time }} - {{ entry.end_time }}
                 {% if session['role'] == "staff" %}
                 <form method="post" action="{{ url_for('delete_timetable', id=entry.id) }}">
                     <button type="submit">Delete</button>
@@ -33,3 +41,4 @@
     <p><a href="{{ url_for('dashboard') }}">Back to Dashboard</a></p>
 </body>
 </html>
+
