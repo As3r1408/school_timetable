@@ -117,7 +117,6 @@ def timetable():
     return render_template('timetable.html', timetable=timetable_entries, use_week_ab=use_week_ab)
 
 
-# Route for deleting timetable entries
 @app.route('/delete_timetable/<int:id>', methods=['POST'])
 def delete_timetable(id):
     if 'user_id' not in session:
@@ -125,11 +124,17 @@ def delete_timetable(id):
         return redirect(url_for('login'))
 
     entry = Timetable.query.get_or_404(id)
-    db.session.delete(entry)
-    db.session.commit()
-    flash("Timetable entry deleted.", "info")
-    
-    return redirect(url_for('timetable'))
+
+    # Allow deletion if the user is an admin
+    if session['role'] == "admin":
+        db.session.delete(entry)
+        db.session.commit()
+        flash("Timetable entry deleted.", "info")
+    else:
+        flash("You do not have permission to delete this entry.", "danger")
+
+    return redirect(url_for('admin_timetable'))
+
 
 @app.route('/admin', methods=['GET', 'POST'])
 def admin():
