@@ -5,9 +5,10 @@
 </head>
 <body>
     <h2>Admin Panel - Manage Users</h2>
-    
+
     <h3>Create a New User</h3>
     <form method="post">
+        <input type="hidden" name="action" value="create_user">
         Username: <input type="text" name="username" required><br>
         Password: <input type="password" name="password" required><br>
         Role: 
@@ -21,7 +22,20 @@
     <h3>Existing Users</h3>
     <ul>
         {% for user in users %}
-            <li>{{ user.username }} ({{ user.role }})</li>
+            <li>
+                {{ user.username }} ({{ user.role }})
+                <form method="post" style="display:inline;">
+                    <input type="hidden" name="action" value="change_password">
+                    <input type="hidden" name="user_id" value="{{ user.id }}">
+                    New Password: <input type="password" name="new_password" required>
+                    <button type="submit">Change Password</button>
+                </form>
+                <form method="post" style="display:inline;">
+                    <input type="hidden" name="action" value="delete_user">
+                    <input type="hidden" name="user_id" value="{{ user.id }}">
+                    <button type="submit" onclick="return confirm('Are you sure?')">Delete User</button>
+                </form>
+            </li>
         {% endfor %}
     </ul>
 

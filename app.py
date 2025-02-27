@@ -141,25 +141,52 @@ def admin():
         return redirect(url_for('dashboard'))
 
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        role = request.form['role']  # student or staff
+        action = request.form.get('action')
 
-        # Check if user already exists
-        existing_user = User.query.filter_by(username=username).first()
-        if existing_user:
-            flash("User already exists!", "warning")
-            return redirect(url_for('admin'))
+        if action == "create_user":
+            # Create user logic
+            username = request.form['username']
+            password = request.form['password']
+            role = request.form['role']  # student or staff
 
-        # Hash the password and create the new user
-        hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
-        new_user = User(username=username, password=hashed_password, role=role)
-        db.session.add(new_user)
-        db.session.commit()
-        flash(f"User '{username}' created successfully!", "success")
+            existing_user = User.query.filter_by(username=username).first()
+            if existing_user:
+                flash("User already exists!", "warning")
+            else:
+                hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
+                new_user = User(username=username, password=hashed_password, role=role)
+                db.session.add(new_user)
+                db.session.commit()
+                flash(f"User '{username}' created successfully!", "success")
+
+        elif action == "change_password":
+            # Change password logic
+            user_id = request.form['user_id']
+            new_password = request.form['new_password']
+
+            user = User.query.get(user_id)
+            if user:
+                user.password = generate_password_hash(new_password, method='pbkdf2:sha256')
+                db.session.commit()
+                flash(f"Password changed for {user.username}!", "success")
+            else:
+                flash("User not found!", "danger")
+
+        elif action == "delete_user":
+            # Delete user logic
+            user_id = request.form['user_id']
+
+            user = User.query.get(user_id)
+            if user:
+                db.session.delete(user)
+                db.session.commit()
+                flash(f"User '{user.username}' deleted!", "info")
+            else:
+                flash("User not found!", "danger")
 
     users = User.query.filter(User.role != "admin").all()  # Don't show the admin account
     return render_template('admin.html', users=users)
+
 
 
 
