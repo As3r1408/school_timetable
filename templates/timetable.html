@@ -1,44 +1,53 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>Timetable</title>
+    <title>Your Timetable</title>
 </head>
 <body>
-    <h2>Timetable</h2>
+    <h2>Your Timetable</h2>
 
-    {% if use_week_ab %}
-        <p>Current Week: <strong>Week {{ current_week_type }}</strong></p>
-    {% endif %}
-
-    {% if session['role'] == "staff" %}
+    <!-- Week Navigation -->
+    <h3>Week: {{ week_range }}</h3>
     <form method="post">
-        Date: <input type="date" name="date" required><br>
-        Time: <input type="time" name="time" required><br>
-        Subject: <input type="text" name="subject" required><br>
-        Teacher: <input type="text" name="teacher" required><br>
-        <button type="submit">Add Entry</button>
+        <button type="submit" name="week_change" value="-1">Previous Week</button>
+        <button type="submit" name="week_change" value="1">Next Week</button>
     </form>
-    {% endif %}
 
-    <h3>Your Schedule</h3>
-    <ul>
-        {% for entry in timetable %}
-            <li>{{ entry.date }} ({{ entry.day }}) - 
-                {% if use_week_ab %}
-                    <strong>Week {{ entry.week_type }}</strong> - 
-                {% endif %}
-                {{ entry.subject }} ({{ entry.teacher }})
-                <br>Time: {{ entry.start_time }} - {{ entry.end_time }}
-                {% if session['role'] == "staff" %}
-                <form method="post" action="{{ url_for('delete_timetable', id=entry.id) }}">
-                    <button type="submit">Delete</button>
-                </form>
-                {% endif %}
-            </li>
-        {% endfor %}
-    </ul>
+    <!-- Step 3: Display Current Week's Timetable -->
+    <h3>Timetable for {{ week_range }}</h3>
+    {% if timetable %}
+        <table border="1">
+            <tr>
+                <th>Monday</th>
+                <th>Tuesday</th>
+                <th>Wednesday</th>
+                <th>Thursday</th>
+                <th>Friday</th>
+                <th>Saturday</th>
+                <th>Sunday</th>
+            </tr>
+            <tr>
+                {% for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] %}
+                    <td>
+                        <ul>
+                            {% for entry in timetable if entry.date.weekday() == loop.index0 %}
+                                <li>
+                                    {{ entry.start_time.strftime('%H:%M') }} - {{ entry.end_time.strftime('%H:%M') }}<br>
+                                    <strong>{{ entry.subject }}</strong><br>
+                                    {{ entry.teacher }}<br>
+                                    Room: {{ entry.room if entry.room else "Not assigned" }}<br>
+                                    <hr>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </td>
+                {% endfor %}
+            </tr>
+        </table>
+    {% else %}
+        <p>No timetable entries for this week.</p>
+    {% endif %}
 
     <p><a href="{{ url_for('dashboard') }}">Back to Dashboard</a></p>
 </body>
 </html>
-

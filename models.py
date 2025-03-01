@@ -1,6 +1,7 @@
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
+from datetime import datetime, date as dt_date
 
 db = SQLAlchemy()
 
@@ -20,30 +21,38 @@ class SchoolSettings(db.Model):
 class Timetable(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    date = db.Column(db.Date, nullable=False)  # Stores full date (YYYY-MM-DD)
-    week = db.Column(db.Integer, nullable=False)  # Week number of the year
-    day_of_week = db.Column(db.String(10), nullable=False)  # "Monday", "Tuesday", etc.
+    date = db.Column(db.Date, nullable=False)
+    week = db.Column(db.Integer, nullable=False)
+    day_of_week = db.Column(db.String(10), nullable=False)
     subject = db.Column(db.String(100), nullable=False)
     teacher = db.Column(db.String(100), nullable=False)
-    start_time = db.Column(db.Time, nullable=False)  # HH:MM format
-    end_time = db.Column(db.Time, nullable=False)  # HH:MM format
-    room = db.Column(db.String(100), nullable=True)  # ✅ Allow NULL values for room
+    start_time = db.Column(db.Time, nullable=False)
+    end_time = db.Column(db.Time, nullable=False)
+    room = db.Column(db.String(100), nullable=True)
 
     user = db.relationship('User', backref='timetables')
 
     def __init__(self, user_id, date, subject, teacher, start_time, end_time, room=None):
         self.user_id = user_id
-        self.date = date
         self.subject = subject
         self.teacher = teacher
         self.start_time = start_time
         self.end_time = end_time
         self.room = room  # Room is optional
 
-        # ✅ Auto-calculate week number and day of the week
-        self.week = date.isocalendar()[1]  # Week number of the year
-        self.day_of_week = date.strftime('%A')  # Convert date to day name
+    # ✅ Ensure `date` is always a `datetime.date` object
+        if isinstance(date, str):  
+            self.date = datetime.strptime(date, '%Y-%m-%d').date()  
+        elif isinstance(date, datetime):
+            self.date = date.date()  
+        elif isinstance(date, dt_date):  # ✅ Now correctly references `date` type
+            self.date = date  
+        else:
+            raise ValueError("Invalid date format. Expected a string, datetime, or date object.")
 
+    # ✅ Auto-calculate week number and day of the week
+        self.week = self.date.isocalendar()[1]  # Week number of the year
+        self.day_of_week = self.date.strftime('%A')  # Convert date to day name
 
 # Subject Model
 class Subject(db.Model):

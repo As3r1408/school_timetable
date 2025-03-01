@@ -90,32 +90,26 @@ def timetable():
 
     user_id = session['user_id']
 
-    # Check if Week A/B system is enabled
-    school_settings = SchoolSettings.query.first()
-    use_week_ab = school_settings.use_week_ab if school_settings else False
+    # Ensure week_offset exists in session
+    if "week_offset" not in session:
+        session["week_offset"] = 0
 
-    if request.method == 'POST':
-        date = datetime.strptime(request.form['date'], '%Y-%m-%d')
-        subject = request.form['subject']
-        teacher = request.form['teacher']
-        start_time = datetime.strptime(request.form['start_time'], '%H:%M').time()
-        end_time = datetime.strptime(request.form['end_time'], '%H:%M').time()
-        room = request.form['room']
+    # Handle week navigation
+    if request.method == "POST" and "week_change" in request.form:
+        session["week_offset"] += int(request.form["week_change"])
 
-        new_entry = Timetable(user_id=user_id, date=date, subject=subject, teacher=teacher,
-                              start_time=start_time, end_time=end_time, room=room)
-        db.session.add(new_entry)
-        db.session.commit()
-        flash("Timetable entry added!", "success")
+    today = datetime.today()
+    week_start = today - timedelta(days=today.weekday()) + timedelta(weeks=session["week_offset"])
+    week_end = week_start + timedelta(days=6)
+    week_range = f"{week_start.strftime('%a %d/%m')} - {week_end.strftime('%a %d/%m')}"
 
-    # Fetch user timetable sorted by date
-    timetable_entries = Timetable.query.filter_by(user_id=user_id).order_by(Timetable.date).all()
+    # Fetch timetable for the logged-in user and the selected week
+    timetable_entries = Timetable.query.filter(
+        Timetable.user_id == user_id,
+        Timetable.week == week_start.isocalendar()[1]
+    ).order_by(Timetable.date, Timetable.start_time).all()
 
-    # Determine Week A or B
-    for entry in timetable_entries:
-        entry.week_type = "A" if entry.week % 2 == 0 else "B"
-
-    return render_template('timetable.html', timetable=timetable_entries, use_week_ab=use_week_ab)
+    return render_template('timetable.html', timetable=timetable_entries, week_range=week_range)
 
 
 @app.route('/delete_timetable/<int:id>', methods=['POST'])
@@ -207,7 +201,7 @@ def admin_timetable():
     selected_user = None
     timetable_entries = []
 
-    # Default to current week if not set
+    # Ensure week_offset exists in session
     if "week_offset" not in session:
         session["week_offset"] = 0
 
@@ -215,81 +209,68 @@ def admin_timetable():
     if request.method == "POST" and "week_change" in request.form:
         session["week_offset"] += int(request.form["week_change"])
 
-    # Calculate the start and end of the selected week
     today = datetime.today()
     week_start = today - timedelta(days=today.weekday()) + timedelta(weeks=session["week_offset"])
     week_end = week_start + timedelta(days=6)
     week_range = f"{week_start.strftime('%a %d/%m')} - {week_end.strftime('%a %d/%m')}"
 
-    # Process form submissions
-    if request.method == 'POST':
-        action = request.form.get("action")
+    # ✅ Ensure action is always defined
+    action = request.form.get("action", None)
 
+    if request.method == 'POST' and action:
         if action == "select_user":
             selected_user_id = request.form["user_id"]
             selected_user = User.query.get(selected_user_id)
 
-    elif action == "add_entry":
-        selected_user_id = request.form["user_id"]
-        selected_user = User.query.get(selected_user_id)
+            # ✅ Fetch timetable only after selecting a user
+            timetable_entries = Timetable.query.filter(
+                Timetable.user_id == selected_user.id,
+                Timetable.week == week_start.isocalendar()[1]  # ✅ Fix: Filter by correct week
+            ).order_by(Timetable.date, Timetable.start_time).all()
 
-        if selected_user:
-            date = datetime.strptime(request.form["date"], '%Y-%m-%d').date()
-            subject_id = request.form["subject_id"]
-            teacher_id = request.form["teacher_id"]
-            start_time = datetime.strptime(request.form["start_time"], '%H:%M').time()
-            end_time = datetime.strptime(request.form["end_time"], '%H:%M').time()
-            room_id = request.form["room_id"]
-            teacher = User.query.get(teacher_id)
-            subject = Subject.query.get(subject_id)
-            room = Room.query.get(room_id)
+        elif action == "add_entry" and "user_id" in request.form:
+            selected_user_id = request.form["user_id"]
+            selected_user = User.query.get(selected_user_id)
 
-            new_entry = Timetable(
-                user_id=selected_user.id,
-                date=date,
-                subject=subject.name if subject else "Unknown",
-                teacher=teacher.username if teacher else "Unknown",
-                start_time=start_time,
-                end_time=end_time,
-                room=room.name if room else "Not assigned"
-            )
-            db.session.add(new_entry)
-            db.session.commit()
-            flash("Timetable entry added!", "success")
+            if selected_user:
+                date = datetime.strptime(request.form["date"], '%Y-%m-%d').date()
+                subject_id = request.form["subject_id"]
+                teacher_id = request.form["teacher_id"]
+                start_time = datetime.strptime(request.form["start_time"], '%H:%M').time()
+                end_time = datetime.strptime(request.form["end_time"], '%H:%M').time()
+                room_id = request.form["room_id"]
 
-        # ✅ Debugging print statement
-            print(f"Added entry: {new_entry.subject}, {new_entry.date}, {new_entry.start_time} - {new_entry.end_time}")
+                teacher = User.query.get(teacher_id)
+                subject = Subject.query.get(subject_id)
+                room = Room.query.get(room_id)
 
-# ✅ Debugging: Print all timetable entries for selected user
-    if selected_user:
-        timetable_entries = Timetable.query.filter(Timetable.user_id == selected_user.id).all()
+                new_entry = Timetable(
+                    user_id=selected_user.id,
+                    date=date,
+                    subject=subject.name if subject else "Unknown",
+                    teacher=teacher.username if teacher else "Unknown",
+                    start_time=start_time,
+                    end_time=end_time,
+                    room=room.name if room else "Not assigned"
+                )
 
-    print(f"Timetable entries for {selected_user.username}:")
-    for entry in timetable_entries:
-        print(f"{entry.date}: {entry.subject}, {entry.start_time} - {entry.end_time}")
+                db.session.add(new_entry)
+                db.session.commit()
+                flash("Timetable entry added!", "success")
 
-
-    # Ensure selected_user is maintained across requests
-    if request.method == "POST" and "user_id" in request.form:
-        selected_user = User.query.get(request.form["user_id"])
-
-    # ✅ Fetch timetable entries only if a user is selected
-    if selected_user:
-        timetable_entries = Timetable.query.filter(
-            Timetable.user_id == selected_user.id,
-            Timetable.date >= week_start,
-            Timetable.date <= week_end
-        ).order_by(Timetable.date, Timetable.start_time).all()
-
-    # ✅ Fetch assigned subjects only if a user is selected
-    assigned_subjects = AssignedSubject.query.filter_by(user_id=selected_user.id).all() if selected_user else []
+                # ✅ Fetch updated timetable after adding an entry
+                timetable_entries = Timetable.query.filter(
+                    Timetable.user_id == selected_user.id,
+                    Timetable.week == week_start.isocalendar()[1]
+                ).order_by(Timetable.date, Timetable.start_time).all()
 
     return render_template(
         "admin_timetable.html",
         users=users, staff_users=staff_users, rooms=rooms,
         selected_user=selected_user, timetable=timetable_entries,
-        week_range=week_range, assigned_subjects=assigned_subjects
+        week_range=week_range
     )
+
 
 
     
@@ -361,4 +342,5 @@ if __name__ == "__main__":
         create_default_admin()
         initialize_school_settings()
         print("Database initialized successfully!")
-        app.run(debug=True)
+    
+    app.run(debug=True)
