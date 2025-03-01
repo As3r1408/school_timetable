@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Admin - Manage Subjects & Rooms</title>
+</head>
+<body>
+    <h2>Admin - Manage Subjects & Rooms</h2>
+
+    <h3>Add a Subject</h3>
+    <form method="post">
+        <input type="hidden" name="action" value="add_subject">
+        Subject Name: <input type="text" name="subject_name" required><br>
+        <button type="submit">Add Subject</button>
+    </form>
+
+    <h3>Existing Subjects</h3>
+    <ul>
+        {% for subject in subjects %}
+            <li>
+                {{ subject.name }}
+                <form method="post" style="display:inline;">
+                    <input type="hidden" name="action" value="delete_subject">
+                    <input type="hidden" name="subject_id" value="{{ subject.id }}">
+                    <button type="submit" onclick="return confirm('Are you sure?')">Delete</button>
+                </form>
+            </li>
+        {% endfor %}
+    </ul>
+
+    <h3>Add a Room</h3>
+    <form method="post">
+        <input type="hidden" name="action" value="add_room">
+        Room Name: <input type="text" name="room_name" required><br>
+        <button type="submit">Add Room</button>
+    </form>
+
+    <h3>Existing Rooms</h3>
+    <ul>
+        {% for room in rooms %}
+            <li>
+                {{ room.name }}
+                <form method="post" style="display:inline;">
+                    <input type="hidden" name="action" value="delete_room">
+                    <input type="hidden" name="room_id" value="{{ room.id }}">
+                    <button type="submit" onclick="return confirm('Are you sure?')">Delete</button>
+                </form>
+            </li>
+        {% endfor %}
+    </ul>
+
+    <h3>Assign Subject to User</h3>
+<form method="post">
+    <input type="hidden" name="action" value="assign_subject">
+    Select User:
+    <select name="user_id" required>
+        {% for user in users %}
+            <option value="{{ user.id }}">{{ user.username }} ({{ user.role }})</option>
+        {% endfor %}
+    </select><br>
+    Select Subject:
+    <select name="subject_id" required>
+        {% for subject in subjects %}
+            <option value="{{ subject.id }}">{{ subject.name }}</option>
+        {% endfor %}
+    </select><br>
+    <button type="submit">Assign Subject</button>
+</form>
+
+    <p><a href="{{ url_for('admin') }}">Back to Admin Panel</a></p>
+</body>
+</html>

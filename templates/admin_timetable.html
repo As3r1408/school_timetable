@@ -6,33 +6,101 @@
 <body>
     <h2>Admin - Manage Timetables</h2>
 
-    <h3>Add Timetable Entry</h3>
+    <!-- Step 1: Select User -->
+    <h3>Select a User</h3>
     <form method="post">
-        Select User:
         <select name="user_id" required>
             {% for user in users %}
-                <option value="{{ user.id }}">{{ user.username }} ({{ user.role }})</option>
+                <option value="{{ user.id }}" {% if selected_user and selected_user.id == user.id %}selected{% endif %}>
+                    {{ user.username }} ({{ user.role }})
+                </option>
             {% endfor %}
-        </select><br>
-        Date: <input type="date" name="date" required><br>
-        Start Time: <input type="time" name="start_time" required><br>
-        End Time: <input type="time" name="end_time" required><br>
-        Subject: <input type="text" name="subject" required><br>
-        Teacher: <input type="text" name="teacher" required><br>
-        <button type="submit">Add Entry</button>
+        </select>
+        <button type="submit">Select</button>
     </form>
 
-    <h3>Existing Timetable Entries</h3>
-    <ul>
-        {% for entry in timetable %}
-            <li>
-                {{ entry.date }} - {{ entry.start_time }} to {{ entry.end_time }} - {{ entry.subject }} ({{ entry.teacher }}) - {{ entry.user.username }}
-                <form method="post" action="{{ url_for('delete_timetable', id=entry.id) }}" style="display:inline;">
-                    <button type="submit" onclick="return confirm('Are you sure?')">Delete</button>
-                </form>
-            </li>
-        {% endfor %}
-    </ul>
+    {% if selected_user %}
+        <h3>Managing timetable for {{ selected_user.username }}</h3>
+
+        <!-- Week Navigation -->
+        <h3>Week: {{ week_range }}</h3>
+        <form method="post">
+            <button type="submit" name="week_change" value="-1">Previous Week</button>
+            <button type="submit" name="week_change" value="1">Next Week</button>
+        </form>
+
+        <!-- Step 2: Add Entry -->
+        <h3>Add Timetable Entry</h3>
+        <form method="post">
+            <input type="hidden" name="user_id" value="{{ selected_user.id }}">
+            Date: <input type="date" name="date" required><br>
+            Start Time: <input type="time" name="start_time" required><br>
+            End Time: <input type="time" name="end_time" required><br>
+            Select Subject:
+                <select name="subject_id" required>
+                {% for assignment in assigned_subjects %}
+                <option value="{{ assignment.subject.id }}">{{ assignment.subject.name }}</option>
+                {% endfor %}
+                </select><br>
+            Teacher: 
+            <select name="teacher_id" required>
+                {% for staff in staff_users %}
+                    <option value="{{ staff.id }}">{{ staff.username }}</option>
+                {% endfor %}
+            </select><br>
+            Select Room:
+            <select name="room_id" required>
+                {% for room in rooms %}
+                    <option value="{{ room.id }}">{{ room.name }}</option>
+                {% endfor %}
+            </select><br>
+            
+            <button type="submit">Add Entry</button>
+        </form>
+
+        <!-- Step 3: Display Current Week's Timetable -->
+        <h3>Timetable for {{ week_range }}</h3>
+
+{% if timetable %}
+    <table border="1">
+        <tr>
+            <th>Monday</th>
+            <th>Tuesday</th>
+            <th>Wednesday</th>
+            <th>Thursday</th>
+            <th>Friday</th>
+            <th>Saturday</th>
+            <th>Sunday</th>
+        </tr>
+        <tr>
+            {% for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] %}
+                <td>
+                    <ul>
+                        {% for entry in timetable if entry.date.weekday() == loop.index0 %}
+                            <li>
+                                {{ entry.start_time.strftime('%H:%M') }} - {{ entry.end_time.strftime('%H:%M') }}<br>
+                                <strong>{{ entry.subject }}</strong><br>
+                                {{ entry.teacher }}<br>
+                                Room: {{ entry.room if entry.room else "Not assigned" }}<br>
+                                <form method="post" style="display:inline;">
+                                    <input type="hidden" name="action" value="delete_entry">
+                                    <input type="hidden" name="entry_id" value="{{ entry.id }}">
+                                    <button type="submit" onclick="return confirm('Are you sure?')">Delete</button>
+                                </form>
+                                <hr>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </td>
+            {% endfor %}
+        </tr>
+    </table>
+{% else %}
+    <p>No timetable entries for this week.</p>
+{% endif %}
+
+
+    {% endif %}
 
     <p><a href="{{ url_for('admin') }}">Back to Admin Panel</a></p>
 </body>

@@ -1,9 +1,9 @@
 import os
-from datetime import datetime
+from datetime import datetime,timedelta
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import db, User, Timetable, SchoolSettings 
+from models import db, User, Timetable, SchoolSettings, Room, Subject, AssignedSubject 
 
 app = Flask(__name__)
 
@@ -100,9 +100,10 @@ def timetable():
         teacher = request.form['teacher']
         start_time = datetime.strptime(request.form['start_time'], '%H:%M').time()
         end_time = datetime.strptime(request.form['end_time'], '%H:%M').time()
+        room = request.form['room']
 
         new_entry = Timetable(user_id=user_id, date=date, subject=subject, teacher=teacher,
-                              start_time=start_time, end_time=end_time)
+                              start_time=start_time, end_time=end_time, room=room)
         db.session.add(new_entry)
         db.session.commit()
         flash("Timetable entry added!", "success")
@@ -200,25 +201,156 @@ def admin_timetable():
         flash("Access denied. Admins only.", "danger")
         return redirect(url_for('dashboard'))
 
-    users = User.query.filter(User.role != "admin").all()  # Get all non-admin users
+    users = User.query.filter(User.role != "admin").all()
+    staff_users = User.query.filter_by(role="staff").all()
+    rooms = Room.query.all()
+    selected_user = None
+    timetable_entries = []
+
+    # Default to current week if not set
+    if "week_offset" not in session:
+        session["week_offset"] = 0
+
+    # Handle week navigation
+    if request.method == "POST" and "week_change" in request.form:
+        session["week_offset"] += int(request.form["week_change"])
+
+    # Calculate the start and end of the selected week
+    today = datetime.today()
+    week_start = today - timedelta(days=today.weekday()) + timedelta(weeks=session["week_offset"])
+    week_end = week_start + timedelta(days=6)
+    week_range = f"{week_start.strftime('%a %d/%m')} - {week_end.strftime('%a %d/%m')}"
+
+    # Process form submissions
+    if request.method == 'POST':
+        action = request.form.get("action")
+
+        if action == "select_user":
+            selected_user_id = request.form["user_id"]
+            selected_user = User.query.get(selected_user_id)
+
+    elif action == "add_entry":
+        selected_user_id = request.form["user_id"]
+        selected_user = User.query.get(selected_user_id)
+
+        if selected_user:
+            date = datetime.strptime(request.form["date"], '%Y-%m-%d').date()
+            subject_id = request.form["subject_id"]
+            teacher_id = request.form["teacher_id"]
+            start_time = datetime.strptime(request.form["start_time"], '%H:%M').time()
+            end_time = datetime.strptime(request.form["end_time"], '%H:%M').time()
+            room_id = request.form["room_id"]
+            teacher = User.query.get(teacher_id)
+            subject = Subject.query.get(subject_id)
+            room = Room.query.get(room_id)
+
+            new_entry = Timetable(
+                user_id=selected_user.id,
+                date=date,
+                subject=subject.name if subject else "Unknown",
+                teacher=teacher.username if teacher else "Unknown",
+                start_time=start_time,
+                end_time=end_time,
+                room=room.name if room else "Not assigned"
+            )
+            db.session.add(new_entry)
+            db.session.commit()
+            flash("Timetable entry added!", "success")
+
+        # ✅ Debugging print statement
+            print(f"Added entry: {new_entry.subject}, {new_entry.date}, {new_entry.start_time} - {new_entry.end_time}")
+
+# ✅ Debugging: Print all timetable entries for selected user
+    if selected_user:
+        timetable_entries = Timetable.query.filter(Timetable.user_id == selected_user.id).all()
+
+    print(f"Timetable entries for {selected_user.username}:")
+    for entry in timetable_entries:
+        print(f"{entry.date}: {entry.subject}, {entry.start_time} - {entry.end_time}")
+
+
+    # Ensure selected_user is maintained across requests
+    if request.method == "POST" and "user_id" in request.form:
+        selected_user = User.query.get(request.form["user_id"])
+
+    # ✅ Fetch timetable entries only if a user is selected
+    if selected_user:
+        timetable_entries = Timetable.query.filter(
+            Timetable.user_id == selected_user.id,
+            Timetable.date >= week_start,
+            Timetable.date <= week_end
+        ).order_by(Timetable.date, Timetable.start_time).all()
+
+    # ✅ Fetch assigned subjects only if a user is selected
+    assigned_subjects = AssignedSubject.query.filter_by(user_id=selected_user.id).all() if selected_user else []
+
+    return render_template(
+        "admin_timetable.html",
+        users=users, staff_users=staff_users, rooms=rooms,
+        selected_user=selected_user, timetable=timetable_entries,
+        week_range=week_range, assigned_subjects=assigned_subjects
+    )
+
+
+    
+@app.route('/admin_subjects', methods=['GET', 'POST'])
+def admin_subjects():
+    if 'user_id' not in session or session['role'] != 'admin':
+        flash("Access denied. Admins only.", "danger")
+        return redirect(url_for('dashboard'))
+
+    subjects = Subject.query.all()
+    rooms = Room.query.all()
+    users = User.query.filter(User.role.in_(["student", "staff"])).all()
 
     if request.method == 'POST':
-        user_id = request.form['user_id']
-        date = datetime.strptime(request.form['date'], '%Y-%m-%d')
-        subject = request.form['subject']
-        teacher = request.form['teacher']
-        start_time = datetime.strptime(request.form['start_time'], '%H:%M').time()
-        end_time = datetime.strptime(request.form['end_time'], '%H:%M').time()
+        action = request.form.get("action")
 
-        new_entry = Timetable(user_id=user_id, date=date, subject=subject, teacher=teacher,
-                              start_time=start_time, end_time=end_time)
-        db.session.add(new_entry)
-        db.session.commit()
-        flash("Timetable entry added!", "success")
+        if action == "add_subject":
+            subject_name = request.form["subject_name"]
+            existing_subject = Subject.query.filter_by(name=subject_name).first()
+            if not existing_subject:
+                new_subject = Subject(name=subject_name)
+                db.session.add(new_subject)
+                db.session.commit()
+                flash(f"Subject '{subject_name}' added!", "success")
 
-    timetable_entries = Timetable.query.order_by(Timetable.date, Timetable.start_time).all()
+        elif action == "delete_subject":
+            subject_id = request.form["subject_id"]
+            subject = Subject.query.get(subject_id)
+            db.session.delete(subject)
+            db.session.commit()
+            flash("Subject deleted!", "info")
 
-    return render_template('admin_timetable.html', users=users, timetable=timetable_entries)
+        elif action == "add_room":
+            room_name = request.form["room_name"]
+            existing_room = Room.query.filter_by(name=room_name).first()
+            if not existing_room:
+                new_room = Room(name=room_name)
+                db.session.add(new_room)
+                db.session.commit()
+                flash(f"Room '{room_name}' added!", "success")
+
+        elif action == "delete_room":
+            room_id = request.form["room_id"]
+            room = Room.query.get(room_id)
+            db.session.delete(room)
+            db.session.commit()
+            flash("Room deleted!", "info")
+
+        elif action == "assign_subject":
+            user_id = request.form["user_id"]
+            subject_id = request.form["subject_id"]
+            existing_assignment = AssignedSubject.query.filter_by(user_id=user_id, subject_id=subject_id).first()
+
+            if not existing_assignment:
+                new_assignment = AssignedSubject(user_id=user_id, subject_id=subject_id)
+                db.session.add(new_assignment)
+                db.session.commit()
+                flash("Subject assigned to user!", "success")
+
+    return render_template("admin_subjects.html", subjects=subjects, rooms=rooms, users=users)
+
 
 
 
