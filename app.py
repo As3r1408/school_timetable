@@ -201,34 +201,41 @@ def admin_timetable():
     selected_user = None
     timetable_entries = []
 
-    # Ensure week_offset exists in session
+    # ✅ Ensure the week_offset exists in session
     if "week_offset" not in session:
         session["week_offset"] = 0
 
-    # Handle week navigation
-    if request.method == "POST" and "week_change" in request.form:
-        session["week_offset"] += int(request.form["week_change"])
+    # ✅ Handle week navigation **without losing the selected user**
+    if request.method == "POST":
+        if "week_change" in request.form:
+            session["week_offset"] += int(request.form["week_change"])
 
+        elif "user_id" in request.form:
+            session["selected_user_id"] = request.form["user_id"]
+
+    # ✅ Ensure selected user is persisted across week changes
+    if "selected_user_id" in session:
+        selected_user = User.query.get(session["selected_user_id"])
+
+    # ✅ Calculate the start and end of the selected week
     today = datetime.today()
     week_start = today - timedelta(days=today.weekday()) + timedelta(weeks=session["week_offset"])
     week_end = week_start + timedelta(days=6)
     week_range = f"{week_start.strftime('%a %d/%m')} - {week_end.strftime('%a %d/%m')}"
 
-    # ✅ Ensure action is always defined
-    action = request.form.get("action", None)
+    # ✅ Fetch timetable for the selected user and current week
+    if selected_user:
+        timetable_entries = Timetable.query.filter(
+            Timetable.user_id == selected_user.id,
+            Timetable.date >= week_start,
+            Timetable.date <= week_end
+        ).order_by(Timetable.date, Timetable.start_time).all()
 
-    if request.method == 'POST' and action:
-        if action == "select_user":
-            selected_user_id = request.form["user_id"]
-            selected_user = User.query.get(selected_user_id)
+    # ✅ Handle adding a timetable entry
+    if request.method == 'POST' and "action" in request.form:
+        action = request.form["action"]
 
-            # ✅ Fetch timetable only after selecting a user
-            timetable_entries = Timetable.query.filter(
-                Timetable.user_id == selected_user.id,
-                Timetable.week == week_start.isocalendar()[1]  # ✅ Fix: Filter by correct week
-            ).order_by(Timetable.date, Timetable.start_time).all()
-
-        elif action == "add_entry" and "user_id" in request.form:
+        if action == "add_entry":
             selected_user_id = request.form["user_id"]
             selected_user = User.query.get(selected_user_id)
 
@@ -253,23 +260,34 @@ def admin_timetable():
                     end_time=end_time,
                     room=room.name if room else "Not assigned"
                 )
-
                 db.session.add(new_entry)
                 db.session.commit()
                 flash("Timetable entry added!", "success")
 
-                # ✅ Fetch updated timetable after adding an entry
-                timetable_entries = Timetable.query.filter(
-                    Timetable.user_id == selected_user.id,
-                    Timetable.week == week_start.isocalendar()[1]
-                ).order_by(Timetable.date, Timetable.start_time).all()
+        elif action == "delete_entry":
+            entry_id = request.form["entry_id"]
+            entry = Timetable.query.get(entry_id)
+            if entry:
+                db.session.delete(entry)
+                db.session.commit()
+                flash("Timetable entry deleted.", "info")
+
+        # ✅ Ensure timetable updates immediately after changes
+        timetable_entries = Timetable.query.filter(
+            Timetable.user_id == selected_user.id,
+            Timetable.date >= week_start,
+            Timetable.date <= week_end
+        ).order_by(Timetable.date, Timetable.start_time).all()
 
     return render_template(
         "admin_timetable.html",
         users=users, staff_users=staff_users, rooms=rooms,
         selected_user=selected_user, timetable=timetable_entries,
-        week_range=week_range
+        week_range=week_range, week_start=week_start, timedelta=timedelta  # ✅ Pass timedelta to template
     )
+
+
+
 
 
 
