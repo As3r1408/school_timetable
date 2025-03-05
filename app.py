@@ -200,12 +200,13 @@ def admin_timetable():
     rooms = Room.query.all()
     selected_user = None
     timetable_entries = []
+    assigned_subjects = []
 
     # ✅ Ensure the week_offset exists in session
     if "week_offset" not in session:
         session["week_offset"] = 0
 
-    # ✅ Handle week navigation **without losing the selected user**
+    # ✅ Handle week navigation without losing the selected user
     if request.method == "POST":
         if "week_change" in request.form:
             session["week_offset"] += int(request.form["week_change"])
@@ -217,19 +218,24 @@ def admin_timetable():
     if "selected_user_id" in session:
         selected_user = User.query.get(session["selected_user_id"])
 
+        if selected_user:
+            # ✅ Retrieve subjects assigned to the selected user
+            assigned_subjects = AssignedSubject.query.filter_by(user_id=selected_user.id).all()
+
     # ✅ Calculate the start and end of the selected week
     today = datetime.today()
     week_start = today - timedelta(days=today.weekday()) + timedelta(weeks=session["week_offset"])
     week_end = week_start + timedelta(days=6)
     week_range = f"{week_start.strftime('%a %d/%m')} - {week_end.strftime('%a %d/%m')}"
 
-    # ✅ Fetch timetable for the selected user and current week
+# ✅ Fetch timetable for the selected user and current week
     if selected_user:
         timetable_entries = Timetable.query.filter(
-            Timetable.user_id == selected_user.id,
-            Timetable.date >= week_start,
-            Timetable.date <= week_end
-        ).order_by(Timetable.date, Timetable.start_time).all()
+        Timetable.user_id == selected_user.id,
+        Timetable.week == week_start.isocalendar()[1]  # Match the correct week
+    ).order_by(Timetable.date, Timetable.start_time).all()
+
+
 
     # ✅ Handle adding a timetable entry
     if request.method == 'POST' and "action" in request.form:
@@ -251,18 +257,25 @@ def admin_timetable():
                 subject = Subject.query.get(subject_id)
                 room = Room.query.get(room_id)
 
-                new_entry = Timetable(
-                    user_id=selected_user.id,
-                    date=date,
-                    subject=subject.name if subject else "Unknown",
-                    teacher=teacher.username if teacher else "Unknown",
-                    start_time=start_time,
-                    end_time=end_time,
-                    room=room.name if room else "Not assigned"
-                )
-                db.session.add(new_entry)
-                db.session.commit()
-                flash("Timetable entry added!", "success")
+                if subject and teacher and room:
+                    new_entry = Timetable(
+                        user_id=selected_user.id,
+                        date=date,
+                        subject=subject.name,
+                        teacher=teacher.username,
+                        start_time=start_time,
+                        end_time=end_time,
+                        room=room.name
+                    )
+                    db.session.add(new_entry)
+                    db.session.commit()
+                    flash("Timetable entry added!", "success")
+
+                    # ✅ Redirect to prevent form resubmission on refresh
+                    return redirect(url_for('admin_timetable'))
+
+                else:
+                    flash("Invalid data. Please ensure all fields are selected.", "danger")
 
         elif action == "delete_entry":
             entry_id = request.form["entry_id"]
@@ -272,22 +285,16 @@ def admin_timetable():
                 db.session.commit()
                 flash("Timetable entry deleted.", "info")
 
-        # ✅ Ensure timetable updates immediately after changes
-        timetable_entries = Timetable.query.filter(
-            Timetable.user_id == selected_user.id,
-            Timetable.date >= week_start,
-            Timetable.date <= week_end
-        ).order_by(Timetable.date, Timetable.start_time).all()
+            # ✅ Redirect after deletion to prevent duplicate deletions on reload
+            return redirect(url_for('admin_timetable'))
 
     return render_template(
         "admin_timetable.html",
         users=users, staff_users=staff_users, rooms=rooms,
         selected_user=selected_user, timetable=timetable_entries,
-        week_range=week_range, week_start=week_start, timedelta=timedelta  # ✅ Pass timedelta to template
+        assigned_subjects=assigned_subjects,  # ✅ Ensure assigned subjects are passed
+        week_range=week_range, week_start=week_start, timedelta=timedelta
     )
-
-
-
 
 
 

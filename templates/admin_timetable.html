@@ -58,9 +58,13 @@
 
             Select Subject:
             <select name="subject_id" required>
-                {% for assignment in assigned_subjects %}
-                <option value="{{ assignment.subject.id }}">{{ assignment.subject.name }}</option>
-                {% endfor %}
+                {% if assigned_subjects %}
+                    {% for assignment in assigned_subjects %}
+                        <option value="{{ assignment.subject.id }}">{{ assignment.subject.name }}</option>
+                    {% endfor %}
+                {% else %}
+                    <option disabled>No subjects assigned</option>
+                {% endif %}
             </select><br>
 
             Teacher: 
@@ -76,7 +80,7 @@
                     <option value="{{ room.id }}">{{ room.name }}</option>
                 {% endfor %}
             </select><br>
-            
+
             <button type="submit">Add Entry</button>
         </form>
 

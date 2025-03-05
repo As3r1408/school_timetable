@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import datetime, date as dt_date, timedelta
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
-from datetime import datetime, date as dt_date
+
 
 db = SQLAlchemy()
 
@@ -40,19 +40,24 @@ class Timetable(db.Model):
         self.end_time = end_time
         self.room = room  # Room is optional
 
-    # ✅ Ensure `date` is always a `datetime.date` object
+        # ✅ Ensure `date` is always a `datetime.date` object
         if isinstance(date, str):  
             self.date = datetime.strptime(date, '%Y-%m-%d').date()  
         elif isinstance(date, datetime):
             self.date = date.date()  
-        elif isinstance(date, dt_date):  # ✅ Now correctly references `date` type
+        elif isinstance(date, dt_date):  
             self.date = date  
         else:
             raise ValueError("Invalid date format. Expected a string, datetime, or date object.")
 
-    # ✅ Auto-calculate week number and day of the week
-        self.week = self.date.isocalendar()[1]  # Week number of the year
+        # ✅ Fix: Ensure Monday entries are assigned to the correct week
+        self.week = self.date.isocalendar()[1]
+        if self.date.weekday() == 0:  # If it's Monday
+            previous_sunday = self.date - timedelta(days=1)
+            self.week = previous_sunday.isocalendar()[1] + 1
+
         self.day_of_week = self.date.strftime('%A')  # Convert date to day name
+
 
 # Subject Model
 class Subject(db.Model):
