@@ -1,9 +1,10 @@
 import os
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import Flask, jsonify, render_template, request, redirect, url_for, session, flash
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from models import db, User, Timetable, SchoolSettings, Room, Subject, AssignedSubject
+
 
 app = Flask(__name__)
 
@@ -17,7 +18,7 @@ app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'default_secret_ke
 # Initialize database
 db.init_app(app)
 
-# Create tables
+
 
 def initialize_school_settings():
     settings = SchoolSettings.query.first()
@@ -195,18 +196,20 @@ def admin_timetable():
         flash("Access denied. Admins only.", "danger")
         return redirect(url_for('dashboard'))
 
+    # Fetch all users (excluding admin), staff users, and rooms for selection
     users = User.query.filter(User.role != "admin").all()
     staff_users = User.query.filter_by(role="staff").all()
     rooms = Room.query.all()
+
     selected_user = None
     timetable_entries = []
     assigned_subjects = []
 
-    # ✅ Ensure the week_offset exists in session
+    # Ensure the week_offset exists in session (used to navigate between weeks)
     if "week_offset" not in session:
         session["week_offset"] = 0
 
-    # ✅ Handle week navigation without losing the selected user
+    # Handle week navigation and user selection across requests
     if request.method == "POST":
         if "week_change" in request.form:
             session["week_offset"] += int(request.form["week_change"])
@@ -214,28 +217,28 @@ def admin_timetable():
         elif "user_id" in request.form:
             session["selected_user_id"] = request.form["user_id"]
 
-    # ✅ Ensure selected user is persisted across week changes
+    # Fetch the selected user if one is chosen (persisted across week navigation)
     if "selected_user_id" in session:
         selected_user = User.query.get(session["selected_user_id"])
 
         if selected_user:
-            # ✅ Retrieve subjects assigned to the selected user
+            # Retrieve the subjects assigned to the selected user (e.g., teacher or student)
             assigned_subjects = AssignedSubject.query.filter_by(user_id=selected_user.id).all()
 
-    # ✅ Calculate the start and end of the selected week
+    # Calculate the start and end date of the selected week
     today = datetime.today()
     week_start = today - timedelta(days=today.weekday()) + timedelta(weeks=session["week_offset"])
     week_end = week_start + timedelta(days=6)
     week_range = f"{week_start.strftime('%a %d/%m')} - {week_end.strftime('%a %d/%m')}"
 
-    # ✅ Fetch timetable for the selected user and current week
+    # Fetch timetable entries for the selected user for the current week
     if selected_user:
         timetable_entries = Timetable.query.filter(
             Timetable.user_id == selected_user.id,
             Timetable.week == week_start.isocalendar()[1]  # Match the correct week
         ).order_by(Timetable.date, Timetable.start_time).all()
 
-    # ✅ Handle adding a timetable entry
+    # Handle adding a new timetable entry
     if request.method == 'POST' and "action" in request.form:
         action = request.form["action"]
 
@@ -244,64 +247,82 @@ def admin_timetable():
             selected_user = User.query.get(selected_user_id)
 
             if selected_user:
+                # Get timetable entry details from the form
                 date = datetime.strptime(request.form["date"], '%Y-%m-%d').date()
                 subject_id = request.form["subject_id"]
                 teacher_id = request.form["teacher_id"]
                 start_time = datetime.strptime(request.form["start_time"], '%H:%M').time()
                 end_time = datetime.strptime(request.form["end_time"], '%H:%M').time()
                 room_id = request.form["room_id"]
-                apply_to_all = 'apply_to_all' in request.form  # New checkbox
 
+                repeat_cycle = request.form.get("repeat_cycle", "0")
+                try:
+                    repeat_cycle = int(repeat_cycle)
+                except ValueError:
+                    repeat_cycle = 0  # Dropdown value for repeat cycle duration
+                exclude_users = request.form.getlist("exclude_users")  # List of users to exclude from entry
+                apply_to_all = 'apply_to_all' in request.form  # Checkbox for applying to all assigned users
+
+                # Fetch the related data from the database
                 teacher = User.query.get(teacher_id)
                 subject = Subject.query.get(subject_id)
                 room = Room.query.get(room_id)
 
                 if subject and teacher and room:
-                    # If apply_to_all is checked, add for all users assigned to the subject
+                    # If 'apply_to_all' is checked, add the entry for all users assigned to the subject
                     users_to_add = [selected_user]
                     if apply_to_all:
-                        # Fetch all students and staff assigned to this subject
-                        users_to_add = User.query.join(AssignedSubject).filter(AssignedSubject.subject_id == subject.id).all()
-
-                    # Add entry for all selected users
+                        users_to_add = User.query.join(AssignedSubject).filter(
+                            AssignedSubject.subject_id == subject.id,
+                            ~User.id.in_(exclude_users)  # Exclude selected users
+                        ).all()
+                # Add the timetable entry for each selected user (based on repeat cycle duration)
                     for user in users_to_add:
-                        new_entry = Timetable(
+                        current_date = date
+                        for _ in range(5):  # Repeat up to 5 times (configurable)
+                            new_entry = Timetable(
                             user_id=user.id,
-                            date=date,
+                            date=current_date,
                             subject=subject.name,
                             teacher=teacher.username,
                             start_time=start_time,
                             end_time=end_time,
-                            room=room.name
-                        )
-                        db.session.add(new_entry)
-                    db.session.commit()
-                    flash("Timetable entry added for selected users!", "success")
+                            room=room.name,
+                            week=week_start.isocalendar()[1]
+                         )
+                            db.session.add(new_entry)
+                            current_date += timedelta(weeks=repeat_cycle)  # Apply repeat cycle
 
-                    # ✅ Redirect to prevent form resubmission on refresh
+                    db.session.commit()
+                    flash("Timetable entry added successfully with repeat cycle!", "success")
+
                     return redirect(url_for('admin_timetable'))
 
                 else:
                     flash("Invalid data. Please ensure all fields are selected.", "danger")
-
+                    
         elif action == "delete_entry":
             entry_id = request.form["entry_id"]
             entry = Timetable.query.get(entry_id)
+
             if entry:
                 db.session.delete(entry)
                 db.session.commit()
-                flash("Timetable entry deleted.", "info")
+                flash(f"Timetable entry deleted!", "info")
 
-            # ✅ Redirect after deletion to prevent duplicate deletions on reload
             return redirect(url_for('admin_timetable'))
 
     return render_template(
-        "admin_timetable.html",
-        users=users, staff_users=staff_users, rooms=rooms,
-        selected_user=selected_user, timetable=timetable_entries,
-        assigned_subjects=assigned_subjects,  # ✅ Ensure assigned subjects are passed
-        week_range=week_range, week_start=week_start, timedelta=timedelta
+        'admin_timetable.html', 
+        users=users, 
+        staff_users=staff_users, 
+        rooms=rooms,
+        timetable_entries=timetable_entries, 
+        week_range=week_range, 
+        assigned_subjects=assigned_subjects, 
+        selected_user=selected_user
     )
+
 
 
 @app.route('/admin_subjects', methods=['GET', 'POST'])
@@ -361,6 +382,14 @@ def admin_subjects():
                 flash("Subject assigned to user!", "success")
 
     return render_template("admin_subjects.html", subjects=subjects, rooms=rooms, users=users)
+
+
+@app.route('/get_assigned_users/<int:subject_id>')
+def get_assigned_users(subject_id):
+    assigned_users = AssignedSubject.query.filter_by(subject_id=subject_id).all()
+    users = [User.query.get(a.user_id) for a in assigned_users]
+    
+    return jsonify([{"id": u.id, "username": u.username} for u in users])
 
 
 # Make sure this is at the BOTTOM
