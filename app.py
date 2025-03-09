@@ -1,9 +1,9 @@
 import os
-from datetime import datetime,timedelta
+from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import db, User, Timetable, SchoolSettings, Room, Subject, AssignedSubject 
+from models import db, User, Timetable, SchoolSettings, Room, Subject, AssignedSubject
 
 app = Flask(__name__)
 
@@ -39,7 +39,6 @@ def create_default_admin():
 @app.route('/')
 def home():
     return render_template('home.html')
-
 
 
 # Route for login
@@ -189,6 +188,7 @@ def admin():
     users = User.query.filter(User.role != "admin").all()  # Exclude admin from list
     return render_template('admin.html', users=users, use_week_ab=school_settings.use_week_ab)
 
+
 @app.route('/admin_timetable', methods=['GET', 'POST'])
 def admin_timetable():
     if 'user_id' not in session or session['role'] != 'admin':
@@ -228,14 +228,12 @@ def admin_timetable():
     week_end = week_start + timedelta(days=6)
     week_range = f"{week_start.strftime('%a %d/%m')} - {week_end.strftime('%a %d/%m')}"
 
-# ✅ Fetch timetable for the selected user and current week
+    # ✅ Fetch timetable for the selected user and current week
     if selected_user:
         timetable_entries = Timetable.query.filter(
-        Timetable.user_id == selected_user.id,
-        Timetable.week == week_start.isocalendar()[1]  # Match the correct week
-    ).order_by(Timetable.date, Timetable.start_time).all()
-
-
+            Timetable.user_id == selected_user.id,
+            Timetable.week == week_start.isocalendar()[1]  # Match the correct week
+        ).order_by(Timetable.date, Timetable.start_time).all()
 
     # ✅ Handle adding a timetable entry
     if request.method == 'POST' and "action" in request.form:
@@ -252,24 +250,33 @@ def admin_timetable():
                 start_time = datetime.strptime(request.form["start_time"], '%H:%M').time()
                 end_time = datetime.strptime(request.form["end_time"], '%H:%M').time()
                 room_id = request.form["room_id"]
+                apply_to_all = 'apply_to_all' in request.form  # New checkbox
 
                 teacher = User.query.get(teacher_id)
                 subject = Subject.query.get(subject_id)
                 room = Room.query.get(room_id)
 
                 if subject and teacher and room:
-                    new_entry = Timetable(
-                        user_id=selected_user.id,
-                        date=date,
-                        subject=subject.name,
-                        teacher=teacher.username,
-                        start_time=start_time,
-                        end_time=end_time,
-                        room=room.name
-                    )
-                    db.session.add(new_entry)
+                    # If apply_to_all is checked, add for all users assigned to the subject
+                    users_to_add = [selected_user]
+                    if apply_to_all:
+                        # Fetch all students and staff assigned to this subject
+                        users_to_add = User.query.join(AssignedSubject).filter(AssignedSubject.subject_id == subject.id).all()
+
+                    # Add entry for all selected users
+                    for user in users_to_add:
+                        new_entry = Timetable(
+                            user_id=user.id,
+                            date=date,
+                            subject=subject.name,
+                            teacher=teacher.username,
+                            start_time=start_time,
+                            end_time=end_time,
+                            room=room.name
+                        )
+                        db.session.add(new_entry)
                     db.session.commit()
-                    flash("Timetable entry added!", "success")
+                    flash("Timetable entry added for selected users!", "success")
 
                     # ✅ Redirect to prevent form resubmission on refresh
                     return redirect(url_for('admin_timetable'))
@@ -297,8 +304,6 @@ def admin_timetable():
     )
 
 
-
-    
 @app.route('/admin_subjects', methods=['GET', 'POST'])
 def admin_subjects():
     if 'user_id' not in session or session['role'] != 'admin':
@@ -356,8 +361,6 @@ def admin_subjects():
                 flash("Subject assigned to user!", "success")
 
     return render_template("admin_subjects.html", subjects=subjects, rooms=rooms, users=users)
-
-
 
 
 # Make sure this is at the BOTTOM

@@ -48,41 +48,45 @@
 
         <!-- Step 2: Add Timetable Entry -->
         <h3>Add Timetable Entry</h3>
-        <form method="post">
-            <input type="hidden" name="action" value="add_entry">
-            <input type="hidden" name="user_id" value="{{ selected_user.id }}">
+<form method="post">
+    <input type="hidden" name="action" value="add_entry">
+    <input type="hidden" name="user_id" value="{{ selected_user.id }}">
 
-            Date: <input type="date" name="date" required><br>
-            Start Time: <input type="time" name="start_time" required><br>
-            End Time: <input type="time" name="end_time" required><br>
+    Date: <input type="date" name="date" required><br>
+    Start Time: <input type="time" name="start_time" required><br>
+    End Time: <input type="time" name="end_time" required><br>
 
-            Select Subject:
-            <select name="subject_id" required>
-                {% if assigned_subjects %}
-                    {% for assignment in assigned_subjects %}
-                        <option value="{{ assignment.subject.id }}">{{ assignment.subject.name }}</option>
-                    {% endfor %}
-                {% else %}
-                    <option disabled>No subjects assigned</option>
-                {% endif %}
-            </select><br>
+    Select Subject:
+    <select name="subject_id" required>
+        {% if assigned_subjects %}
+            {% for assignment in assigned_subjects %}
+                <option value="{{ assignment.subject.id }}">{{ assignment.subject.name }}</option>
+            {% endfor %}
+        {% else %}
+            <option disabled>No subjects assigned</option>
+        {% endif %}
+    </select><br>
 
-            Teacher: 
-            <select name="teacher_id" required>
-                {% for staff in staff_users %}
-                    <option value="{{ staff.id }}">{{ staff.username }}</option>
-                {% endfor %}
-            </select><br>
+    Teacher: 
+    <select name="teacher_id" required>
+        {% for staff in staff_users %}
+            <option value="{{ staff.id }}">{{ staff.username }}</option>
+        {% endfor %}
+    </select><br>
 
-            Select Room:
-            <select name="room_id" required>
-                {% for room in rooms %}
-                    <option value="{{ room.id }}">{{ room.name }}</option>
-                {% endfor %}
-            </select><br>
+    Select Room:
+    <select name="room_id" required>
+        {% for room in rooms %}
+            <option value="{{ room.id }}">{{ room.name }}</option>
+        {% endfor %}
+    </select><br>
 
-            <button type="submit">Add Entry</button>
-        </form>
+    <!-- New checkbox: Apply to all Subject assignees -->
+    <label for="apply_to_all">Apply to all users assigned to this subject:</label>
+    <input type="checkbox" name="apply_to_all" id="apply_to_all">
+    <br>
+    <button type="submit" name="action" value="add_entry">Add Entry</button>
+    </form>
 
         <!-- Step 3: Display Current Week's Timetable -->
         <h3>Timetable for {{ week_range }}</h3>
