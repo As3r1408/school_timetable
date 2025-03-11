@@ -199,8 +199,10 @@ def admin_timetable():
     staff_users = User.query.filter_by(role="staff").all()
     rooms = Room.query.all()
     selected_user = None
+    selected_subject = None
     timetable_entries = []
     assigned_subjects = []
+    subject_assignees = []
 
     # ✅ Ensure the week_offset exists in session
     if "week_offset" not in session:
@@ -213,6 +215,10 @@ def admin_timetable():
 
         elif "user_id" in request.form:
             session["selected_user_id"] = request.form["user_id"]
+            session.pop("selected_subject_id", None)
+        elif "subject_id" in request.form:
+            session["selected_subject_id"] = request.form["subject_id"]
+            session.pop("selected_user_id", None)  # Clear selected user
 
     # ✅ Ensure selected user is persisted across week changes
     if "selected_user_id" in session:
@@ -287,15 +293,56 @@ def admin_timetable():
 
             # ✅ Redirect after deletion to prevent duplicate deletions on reload
             return redirect(url_for('admin_timetable'))
+        elif action == "assign_by_subject":
+            subject_id = request.form["subject_id"]
+            date = datetime.strptime(request.form["date"], '%Y-%m-%d').date()
+            start_time = datetime.strptime(request.form["start_time"], '%H:%M').time()
+            end_time = datetime.strptime(request.form["end_time"], '%H:%M').time()
+            room_id = request.form["room_id"]
+            room = Room.query.get(room_id)
+            subject = Subject.query.get(subject_id)
+
+            if not subject or not room:
+                flash("Invalid subject or room selection.", "danger")
+                return redirect(url_for('admin_timetable'))
+
+            # Retrieve users assigned to the subject
+            assigned_users = AssignedSubject.query.filter_by(subject_id=subject_id).all()
+            assigned_user_ids = {assignment.user_id for assignment in assigned_users}
+
+            # Get excluded users from the form
+            excluded_user_ids = set(map(int, request.form.getlist("excluded_users")))
+
+            # Assign timetable entry to all non-excluded users
+            for user_id in assigned_user_ids - excluded_user_ids:
+                user = User.query.get(user_id)
+                teacher = user if user.role == "staff" else None  # Ensure staff members are assigned as teachers
+
+                new_entry = Timetable(
+                user_id=user_id,
+                date=date,
+                subject=subject.name,
+                teacher=teacher.username if teacher else "N/A",
+                start_time=start_time,
+                end_time=end_time,
+                room=room.name
+              )
+                db.session.add(new_entry)
+
+            db.session.commit()
+            flash(f"Timetable entry added for all assigned users of '{subject.name}'!", "success")
+            return redirect(url_for('admin_timetable'))
+
+    subjects = Subject.query.all()  # ✅ Fetch all subjects from the database
 
     return render_template(
-        "admin_timetable.html",
-        users=users, staff_users=staff_users, rooms=rooms,
-        selected_user=selected_user, timetable=timetable_entries,
-        assigned_subjects=assigned_subjects,  # ✅ Ensure assigned subjects are passed
-        week_range=week_range, week_start=week_start, timedelta=timedelta
-    )
-
+    "admin_timetable.html",
+    users=users, staff_users=staff_users, rooms=rooms,
+    subjects=subjects,  # ✅ Pass subjects to the template
+    selected_user=selected_user, timetable=timetable_entries,
+    assigned_subjects=assigned_subjects,  
+    week_range=week_range, week_start=week_start, timedelta=timedelta
+)
 
 
     

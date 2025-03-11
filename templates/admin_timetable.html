@@ -17,27 +17,103 @@
             document.body.appendChild(form);
             form.submit();
         }
+
+        // Show/hide exclude popup
+        function toggleExcludePopup() {
+            let popup = document.getElementById("excludePopup");
+            popup.style.display = (popup.style.display === "block") ? "none" : "block";
+        }
+
+        // Filter users in exclude menu
+        function filterUsers() {
+            let search = document.getElementById("searchExclude").value.toLowerCase();
+            let users = document.querySelectorAll(".exclude-user");
+
+            users.forEach(user => {
+                let name = user.getAttribute("data-name").toLowerCase();
+                user.style.display = name.includes(search) ? "block" : "none";
+            });
+        }
+
+        // Handle selection logic
+        function handleSelection() {
+            let userSelect = document.getElementById("userSelect");
+            let subjectSelect = document.getElementById("subjectSelect");
+            let timetableForm = document.getElementById("timetableForm");
+            let excludeButton = document.getElementById("excludeButton");
+
+            if (subjectSelect.value) {
+                // If subject is selected, hide user select and show timetable form
+                userSelect.disabled = true;
+                timetableForm.style.display = "block";
+                excludeButton.style.display = "inline";
+            } else {
+                userSelect.disabled = false;
+                timetableForm.style.display = "none";
+                excludeButton.style.display = "none";
+            }
+        }
+
+        function resetSelection() {
+            document.getElementById("userSelect").value = "";
+            document.getElementById("subjectSelect").value = "";
+            document.getElementById("userSelect").disabled = false;
+            document.getElementById("timetableForm").style.display = "none";
+            document.getElementById("excludeButton").style.display = "none";
+            document.getElementById("excludePopup").style.display = "none";
+        }
     </script>
+    <style>
+        #excludePopup {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border: 1px solid black;
+            box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
+        }
+    </style>
 </head>
 <body>
     <h2>Admin - Manage Timetables</h2>
 
-    <!-- Step 1: Select User -->
-    <h3>Select a User</h3>
+    <!-- Step 1: Select User or Subject-->
+    <h3>Select a User or Subject</h3>
     <form method="post">
-        <input type="hidden" name="action" value="select_user">
-        <select name="user_id" required>
+        <input type="hidden" name="action" value="select">
+
+        <select id="userSelect" name="user_id" onchange="resetSelection()">
+            <option value="">Select User</option>
             {% for user in users %}
                 <option value="{{ user.id }}" {% if selected_user and selected_user.id == user.id %}selected{% endif %}>
                     {{ user.username }} ({{ user.role }})
                 </option>
             {% endfor %}
         </select>
+
+        <select id="subjectSelect" name="subject_id" onchange="handleSelection()">
+            <option value="">Select Subject</option>
+            {% for subject in subjects %}
+                <option value="{{ subject.id }}">{{ subject.name }}</option>
+            {% endfor %}
+        </select>
+
+        <button type="button" onclick="resetSelection()">Reset</button>
         <button type="submit">Select</button>
     </form>
 
-    {% if selected_user %}
-        <h3>Managing timetable for {{ selected_user.username }}</h3>
+    {% if selected_user or selected_subject %}
+        <h3>
+            Managing timetable for 
+            {% if selected_subject %}
+                {{ selected_subject.name }} assignees
+            {% else %}
+                {{ selected_user.username }}
+            {% endif %}
+        </h3>
 
         <!-- Week Navigation -->
         <h3>
@@ -47,27 +123,51 @@
         </h3>
 
         <!-- Step 2: Add Timetable Entry -->
-        <h3>Add Timetable Entry</h3>
-        <form method="post">
-            <input type="hidden" name="action" value="add_entry">
-            <input type="hidden" name="user_id" value="{{ selected_user.id }}">
+        {% if selected_user %}
+            <h3>Add Timetable Entry</h3>
+            <form method="post">
+                <input type="hidden" name="action" value="add_entry">
+                <input type="hidden" name="user_id" value="{{ selected_user.id }}">
+
+                Date: <input type="date" name="date" required><br>
+                Start Time: <input type="time" name="start_time" required><br>
+                End Time: <input type="time" name="end_time" required><br>
+
+                Select Subject:
+                <select name="subject_id" required>
+                    {% for assignment in assigned_subjects %}
+                        <option value="{{ assignment.subject.id }}">{{ assignment.subject.name }}</option>
+                    {% endfor %}
+                </select><br>
+
+                Teacher: 
+                <select name="teacher_id" required>
+                    {% for staff in staff_users %}
+                        <option value="{{ staff.id }}">{{ staff.username }}</option>
+                    {% endfor %}
+                </select><br>
+
+                Select Room:
+                <select name="room_id" required>
+                    {% for room in rooms %}
+                        <option value="{{ room.id }}">{{ room.name }}</option>
+                    {% endfor %}
+                </select><br>
+
+                <button type="submit">Add Entry</button>
+            </form>
+        {% endif %}
+
+        <!-- Mass Timetable Entry for Subject Assignees -->
+        <form id="timetableForm" method="post" style="display: none;">
+            <input type="hidden" name="action" value="add_entry_subject">
+            <input type="hidden" name="subject_id" value="{{ selected_subject.id }}">
 
             Date: <input type="date" name="date" required><br>
             Start Time: <input type="time" name="start_time" required><br>
             End Time: <input type="time" name="end_time" required><br>
 
-            Select Subject:
-            <select name="subject_id" required>
-                {% if assigned_subjects %}
-                    {% for assignment in assigned_subjects %}
-                        <option value="{{ assignment.subject.id }}">{{ assignment.subject.name }}</option>
-                    {% endfor %}
-                {% else %}
-                    <option disabled>No subjects assigned</option>
-                {% endif %}
-            </select><br>
-
-            Teacher: 
+            Select Teacher:
             <select name="teacher_id" required>
                 {% for staff in staff_users %}
                     <option value="{{ staff.id }}">{{ staff.username }}</option>
@@ -81,8 +181,24 @@
                 {% endfor %}
             </select><br>
 
+            <button type="button" id="excludeButton" style="display: none;" onclick="toggleExcludePopup()">Exclude Users</button>
             <button type="submit">Add Entry</button>
         </form>
+
+        <!-- Exclude Users Popup -->
+        <div id="excludePopup">
+            <h3>Exclude Users</h3>
+            <input type="text" id="searchExclude" onkeyup="filterUsers()" placeholder="Search users...">
+            <ul>
+                {% for user in subject_assignees %}
+                    <li class="exclude-user" data-name="{{ user.username }}">
+                        <input type="checkbox" name="exclude_users" value="{{ user.id }}"> {{ user.username }} ({{ user.role }})
+                    </li>
+                {% endfor %}
+            </ul>
+            <button type="button" onclick="toggleExcludePopup()">Close</button>
+        </div>
+    {% endif %}
 
         <!-- Step 3: Display Current Week's Timetable -->
         <h3>Timetable for {{ week_range }}</h3>
@@ -119,7 +235,7 @@
         {% else %}
             <p>No timetable entries for this week.</p>
         {% endif %}
-    {% endif %}
+
 
     <p><a href="{{ url_for('admin') }}">Back to Admin Panel</a></p>
 </body>
