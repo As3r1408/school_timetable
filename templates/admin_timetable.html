@@ -18,69 +18,157 @@
             form.submit();
         }
 
-        document.addEventListener('DOMContentLoaded', function() {
-            document.getElementById('repeat_cycle').addEventListener('change', function() {
-                var repeatOptions = document.getElementById('repeat_options');
-                if (this.checked) {
-                    repeatOptions.style.display = 'block';
-                } else {
-                    repeatOptions.style.display = 'none';
-                }
+        function showEditByUser() {
+            document.getElementById("editByUser").style.display = "block";
+            document.getElementById("editBySubject").style.display = "none";
+        }
+
+        function showEditBySubject() {
+            document.getElementById("editByUser").style.display = "none";
+            document.getElementById("editBySubject").style.display = "block";
+        }
+
+        function showUserTimetable(userId) {
+            let form = document.createElement("form");
+            form.method = "POST";
+            form.style.display = "none";
+
+            let input = document.createElement("input");
+            input.type = "hidden";
+            input.name = "user_id";
+            input.value = userId;
+
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
+        }
+
+        function showSubjectTimetable(subjectId) {
+            let form = document.createElement("form");
+            form.method = "POST";
+            form.style.display = "none";
+
+            let input = document.createElement("input");
+            input.type = "hidden";
+            input.name = "subject_id";
+            input.value = subjectId;
+
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
+        }
+
+        function toggleExcludePopup() {
+            let popup = document.getElementById("excludePopup");
+            popup.style.display = (popup.style.display === "block") ? "none" : "block";
+        }
+
+        function filterUsers() {
+            let search = document.getElementById("searchExclude").value.toLowerCase();
+            let users = document.querySelectorAll(".exclude-user");
+
+            users.forEach(user => {
+                let name = user.getAttribute("data-name").toLowerCase();
+                user.style.display = name.includes(search) ? "block" : "none";
             });
-
-            function toggleExcludeModal() {
-                var checkbox = document.getElementById('apply_all');
-                var modal = document.getElementById('excludeUsersModal');
-                if (checkbox.checked) {
-                    $('#excludeUsersModal').modal('show');
-                } else {
-                    $('#excludeUsersModal').modal('hide');
-                }
-            }
-
-            document.getElementById('apply_all').onclick = toggleExcludeModal;
-
-            // Handle toggle for Week A/B
-            document.getElementById('weekCycleToggle').addEventListener('change', function() {
-                var isWeekAB = this.checked;
-                updateWeekDisplay(isWeekAB);
-            });
-        });
-
-        function updateWeekDisplay(isWeekAB) {
-            let weekTypeText = isWeekAB ? 'Week A/B Cycle' : 'Weekly Cycle';
-            let cycleLabel = document.getElementById('weekCycleLabel');
-            cycleLabel.innerText = 'Cycle Type: ' + weekTypeText;
-            // Additional logic can be added for updating the display based on cycle type.
         }
     </script>
+    <style>
+        #excludePopup {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border: 1px solid black;
+            box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
+        }
+    </style>
 </head>
 <body>
     <h2>Admin - Manage Timetables</h2>
 
-    <h3>Select a User</h3>
-    <form method="post">
-        <input type="hidden" name="action" value="select_user">
-        <select name="user_id" required>
+    <!-- Initial Buttons -->
+    <button onclick="showEditByUser()">Edit by User</button>
+    <button onclick="showEditBySubject()">Edit by Subject/Group</button>
+
+    <!-- Edit by User Section -->
+    <div id="editByUser" style="display: none;">
+        <h3>Edit by User</h3>
+        <input type="text" id="searchUser" placeholder="Search users...">
+        <table border="1">
+            <tr>
+                <th>Student Name</th>
+                <th>Year Group</th>
+                <th>Subjects</th>
+                <th>Edit Timetable</th>
+            </tr>
             {% for user in users %}
-                <option value="{{ user.id }}" {% if selected_user and selected_user.id == user.id %}selected{% endif %}>
-                    {{ user.username }} ({{ user.role }})
-                </option>
+                <tr>
+                    <td>{{ user.username }}</td>
+                    <td>{{ user.year_group }}</td>
+                    <td>
+                        <button type="button" onclick="alert('Subjects: {{ user.assigned_subjects|map(attribute='subject.name')|join(', ') }}')">View Subjects</button>
+                    </td>
+                    <td>
+                        <button type="button" onclick="showUserTimetable({{ user.id }})">Edit Timetable</button>
+                    </td>
+                </tr>
             {% endfor %}
-        </select>
-        <button type="submit">Select</button>
-    </form>
+        </table>
+    </div>
 
-    {% if selected_user %}
-        <h3>Managing timetable for {{ selected_user.username }}</h3>
+    <!-- Edit by Subject/Group Section -->
+    <div id="editBySubject" style="display: none;">
+        <h3>Edit by Subject/Group</h3>
+        <input type="text" id="searchSubject" placeholder="Search subjects...">
+        <table border="1">
+            <tr>
+                <th>Subject/Year Group</th>
+                <th>Type</th>
+                <th>Staff Members</th>
+                <th>Students</th>
+                <th>Edit Timetables</th>
+            </tr>
+            {% for subject in subjects %}
+                <tr>
+                    <td>{{ subject.name }}</td>
+                    <td>Subject</td>
+                    <td>{{ subject.assigned_users|selectattr('user.role', 'equalto', 'staff')|map(attribute='user.username')|join(', ') }}</td>
+                    <td>
+                        <button type="button" onclick="alert('Students: {{ subject.assigned_users|selectattr('user.role', 'equalto', 'student')|map(attribute='user.username')|join(', ') }}')">View Students</button>
+                    </td>
+                    <td>
+                        <button type="button" onclick="showSubjectTimetable({{ subject.id }})">Edit Timetables</button>
+                    </td>
+                </tr>
+            {% endfor %}
+            {% for year_group in year_groups %}
+                <tr>
+                    <td>{{ year_group }}</td>
+                    <td>Year Group</td>
+                    <td></td>
+                    <td>
+                        <button type="button" onclick="alert('Students: {{ users|selectattr('year_group', 'equalto', year_group)|map(attribute='username')|join(', ') }}')">View Students</button>
+                    </td>
+                    <td>
+                        <button type="button" onclick="showSubjectTimetable(year_group)">Edit Timetables</button>
+                    </td>
+                </tr>
+            {% endfor %}
+        </table>
+    </div>
 
-        <!-- Week Cycle Toggle -->
+    {% if selected_user or selected_subject %}
         <h3>
-            Cycle Type: 
-            <label for="weekCycleToggle" id="weekCycleLabel">
-                {{ 'Cycle Type: Weekly Cycle' if not week_is_A_B else 'Cycle Type: Week A/B Cycle' }}
-            </label>
-            <input type="checkbox" id="weekCycleToggle" {% if week_is_A_B %}checked{% endif %}> Toggle Week A/B
+            Managing timetable for 
+            {% if selected_subject %}
+                {{ selected_subject.name }} assignees
+            {% else %}
+                {{ selected_user.username }}
+            {% endif %}
         </h3>
 
         <!-- Week Navigation -->
@@ -90,124 +178,127 @@
             <button type="button" onclick="changeWeek(1)">Next →</button>
         </h3>
 
-        <h3>Add Timetable Entry</h3>
-        <form method="post">
-            <input type="hidden" name="action" value="add_entry">
-            <input type="hidden" name="user_id" value="{{ selected_user.id }}">
+        <!-- Step 2: Add Timetable Entry -->
+        {% if selected_user %}
+            <h3>Add Timetable Entry</h3>
+            <form method="post">
+                <input type="hidden" name="action" value="add_entry">
+                <input type="hidden" name="user_id" value="{{ selected_user.id }}">
 
-            Date: <input type="date" name="date" required><br>
-            Start Time: <input type="time" name="start_time" required><br>
-            End Time: <input type="time" name="end_time" required><br>
+                Date: <input type="date" name="date" required><br>
+                Start Time: <input type="time" name="start_time" required><br>
+                End Time: <input type="time" name="end_time" required><br>
 
-            Select Subject:
-            <select name="subject_id" required>
-                {% if assigned_subjects %}
+                Select Subject:
+                <select name="subject_id" required>
                     {% for assignment in assigned_subjects %}
                         <option value="{{ assignment.subject.id }}">{{ assignment.subject.name }}</option>
                     {% endfor %}
-                {% else %}
-                    <option disabled>No subjects assigned</option>
-                {% endif %}
-            </select><br>
+                </select><br>
 
-            Teacher: 
-            <select name="teacher_id" required>
-                {% for staff in staff_users %}
-                    <option value="{{ staff.id }}">{{ staff.username }}</option>
-                {% endfor %}
-            </select><br>
-
-            Select Room:
-            <select name="room_id" required>
-                {% for room in rooms %}
-                    <option value="{{ room.id }}">{{ room.name }}</option>
-                {% endfor %}
-            </select><br>
-
-            <label>
-                <input type="checkbox" id="apply_all" name="apply_all">
-                Apply to all Subject assignees
-            </label>
-            <br>
-
-            <div class="modal fade" id="excludeUsersModal" tabindex="-1" role="dialog" aria-labelledby="excludeUsersModalLabel" aria-hidden="true">
-                <div class="modal-dialog" role="document">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title" id="excludeUsersModalLabel">Exclude Users</h5>
-                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                                <span aria-hidden="true">&times;</span>
-                            </button>
-                        </div>
-                        <div class="modal-body">
-                            <input type="text" class="form-control" id="userSearch" placeholder="Search users..." onkeyup="filterUsers()">
-                            <div id="userList" class="mt-3">
-                                {% for user in users %}
-                                    <div class="form-check">
-                                        <input type="checkbox" class="form-check-input" name="exclude_users" value="{{ user.id }}" id="user{{ user.id }}">
-                                        <label class="form-check-label" for="user{{ user.id }}">{{ user.username }}</label>
-                                    </div>
-                                {% endfor %}
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                            <button type="button" class="btn btn-primary" data-dismiss="modal">Save changes</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <label>Repeat each cycle:</label>
-            <input type="checkbox" name="repeat_cycle" id="repeat_cycle">
-            <div id="repeat_options" style="display: none;">
-                <label>Repeat Duration:</label>
-                <select name="repeat_duration">
-                    <option value="2">Next Two Cycles</option>
-                    <option value="3">Next 3 Cycles</option>
-                    <option value="4">This Month</option>
-                    <option value="5">This Year</option>
-                </select>
-            </div>
-            <br>
-
-            <button type="submit" name="action" value="add_entry" class="btn btn-primary">Add Entry</button>
-        </form>
-
-        <h3>Timetable for {{ week_range }}</h3>
-        {% if timetable %}
-            <table border="1">
-                <tr>
-                    {% for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] %}
-                        <th>{{ day }} - {{ (week_start + timedelta(days=loop.index0)).strftime('%d/%m') }}</th>
+                Teacher: 
+                <select name="teacher_id" required>
+                    {% for staff in staff_users %}
+                        <option value="{{ staff.id }}">{{ staff.username }}</option>
                     {% endfor %}
-                </tr>
-                <tr>
-                    {% for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] %}
-                        <td>
-                            <ul>
-                                {% for entry in timetable if entry.date.strftime('%A') == day %}
-                                    <li>
-                                        {{ entry.start_time.strftime('%H:%M') }} - {{ entry.end_time.strftime('%H:%M') }}<br>
-                                        <strong>{{ entry.subject }}</strong><br>
-                                        {{ entry.teacher }}<br>
-                                        Room: {{ entry.room if entry.room else "Not assigned" }}<br>
-                                        <form method="post" style="display:inline;">
-                                            <input type="hidden" name="action" value="delete_entry">
-                                            <input type="hidden" name="entry_id" value="{{ entry.id }}">
-                                            <button type="submit" onclick="return confirm('Are you sure?')">Delete</button>
-                                        </form>
-                                        <hr>
-                                    </li>
-                                {% endfor %}
-                            </ul>
-                        </td>
+                </select><br>
+
+                Select Room:
+                <select name="room_id" required>
+                    {% for room in rooms %}
+                        <option value="{{ room.id }}">{{ room.name }}</option>
                     {% endfor %}
-                </tr>
-            </table>
-        {% else %}
-            <p>No timetable entries for this week.</p>
+                </select><br>
+
+                <button type="submit">Add Entry</button>
+            </form>
         {% endif %}
+
+        <!-- Mass Timetable Entry for Subject Assignees -->
+        {% if selected_subject %}
+            <form id="timetableForm" method="post">
+                <input type="hidden" name="action" value="assign_by_subject">
+                <input type="hidden" name="subject_id" value="{{ selected_subject.id }}">
+
+                Date: <input type="date" name="date" required><br>
+                Start Time: <input type="time" name="start_time" required><br>
+                End Time: <input type="time" name="end_time" required><br>
+
+                Select Subject:
+                <select name="subject_id" required>
+                    {% for subject in subjects %}
+                        <option value="{{ subject.id }}">{{ subject.name }}</option>
+                    {% endfor %}
+                </select><br>
+
+                Select Teacher:
+                <select name="teacher_id" required>
+                    {% for staff in staff_users %}
+                        <option value="{{ staff.id }}">{{ staff.username }}</option>
+                    {% endfor %}
+                </select><br>
+
+                Select Room:
+                <select name="room_id" required>
+                    {% for room in rooms %}
+                        <option value="{{ room.id }}">{{ room.name }}</option>
+                    {% endfor %}
+                </select><br>
+
+                <button type="button" id="excludeButton" onclick="toggleExcludePopup()">Exclude Users</button>
+                <button type="submit">Add Entry</button>
+            </form>
+        {% endif %}
+
+        <!-- Exclude Users Popup -->
+        <div id="excludePopup">
+            <h3>Exclude Users</h3>
+            <input type="text" id="searchExclude" onkeyup="filterUsers()" placeholder="Search users...">
+            <ul>
+                {% for user in subject_assignees %}
+                    <li class="exclude-user" data-name="{{ user.user.username }}">
+                        <input type="checkbox" name="excluded_users" value="{{ user.user_id }}"> {{ user.user.username }} ({{ user.user.role }})
+                    </li>
+                {% endfor %}
+            </ul>
+            <button type="button" onclick="toggleExcludePopup()">Close</button>
+        </div>
+    {% endif %}
+
+    <!-- Step 3: Display Current Week's Timetable -->
+    <h3>Timetable for {{ week_range }}</h3>
+    {% if timetable %}
+        <table border="1">
+            <tr>
+                {% for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] %}
+                    <th>{{ day }} - {{ (week_start + timedelta(days=loop.index0)).strftime('%d/%m') }}</th>
+                {% endfor %}
+            </tr>
+            <tr>
+                {% for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] %}
+                    <td>
+                        <ul>
+                            {% for entry in timetable if entry.date.strftime('%A') == day %}
+                                <li>
+                                    {{ entry.start_time.strftime('%H:%M') }} - {{ entry.end_time.strftime('%H:%M') }}<br>
+                                    <strong>{{ entry.subject }}</strong><br>
+                                    {{ entry.teacher }}<br>
+                                    Room: {{ entry.room if entry.room else "Not assigned" }}<br>
+                                    <form method="post" style="display:inline;">
+                                        <input type="hidden" name="action" value="delete_entry">
+                                        <input type="hidden" name="entry_id" value="{{ entry.id }}">
+                                        <button type="submit" onclick="return confirm('Are you sure?')">Delete</button>
+                                    </form>
+                                    <hr>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </td>
+                {% endfor %}
+            </tr>
+        </table>
+    {% else %}
+        <p>No timetable entries for this week.</p>
     {% endif %}
 
     <p><a href="{{ url_for('admin') }}">Back to Admin Panel</a></p>

@@ -200,45 +200,64 @@ def admin_timetable():
     users = User.query.filter(User.role != "admin").all()
     staff_users = User.query.filter_by(role="staff").all()
     rooms = Room.query.all()
-
+    subjects = Subject.query.all()
+    year_groups = db.session.query(User.year_group).distinct().all()
+    year_groups = [yg[0] for yg in year_groups if yg[0] is not None]
     selected_user = None
+    selected_subject = None
     timetable_entries = []
     assigned_subjects = []
+    subject_assignees = []
 
-    # Ensure the week_offset exists in session (used to navigate between weeks)
+    # Ensure the week_offset exists in session
     if "week_offset" not in session:
         session["week_offset"] = 0
 
-    # Handle week navigation and user selection across requests
+    # Handle week navigation without losing the selected user or subject
     if request.method == "POST":
         if "week_change" in request.form:
             session["week_offset"] += int(request.form["week_change"])
-
         elif "user_id" in request.form:
             session["selected_user_id"] = request.form["user_id"]
+            session.pop("selected_subject_id", None)  # Clear selected subject
+        elif "subject_id" in request.form:
+            session["selected_subject_id"] = request.form["subject_id"]
+            session.pop("selected_user_id", None)  # Clear selected user
 
-    # Fetch the selected user if one is chosen (persisted across week navigation)
+    # Ensure selected user or subject is persisted across week changes
     if "selected_user_id" in session:
         selected_user = User.query.get(session["selected_user_id"])
-
         if selected_user:
-            # Retrieve the subjects assigned to the selected user (e.g., teacher or student)
             assigned_subjects = AssignedSubject.query.filter_by(user_id=selected_user.id).all()
+    elif "selected_subject_id" in session:
+        selected_subject = Subject.query.get(session["selected_subject_id"])
+        if selected_subject:
+            subject_assignees = AssignedSubject.query.filter_by(subject_id=selected_subject.id).all()
 
-    # Calculate the start and end date of the selected week
+    # Calculate the start and end of the selected week
     today = datetime.today()
     week_start = today - timedelta(days=today.weekday()) + timedelta(weeks=session["week_offset"])
     week_end = week_start + timedelta(days=6)
     week_range = f"{week_start.strftime('%a %d/%m')} - {week_end.strftime('%a %d/%m')}"
 
-    # Fetch timetable entries for the selected user for the current week
+    # Fetch timetable for the selected user or subject and current week
     if selected_user:
         timetable_entries = Timetable.query.filter(
             Timetable.user_id == selected_user.id,
-            Timetable.week == week_start.isocalendar()[1]  # Match the correct week
+            Timetable.date >= week_start,
+            Timetable.date <= week_end
+        ).order_by(Timetable.date, Timetable.start_time).all()
+    elif selected_subject:
+        # Fetch common timetable entries for all assignees of the selected subject
+        assignee_ids = [assignment.user_id for assignment in subject_assignees]
+        timetable_entries = Timetable.query.filter(
+            Timetable.user_id.in_(assignee_ids),
+            Timetable.subject == selected_subject.name,
+            Timetable.date >= week_start,
+            Timetable.date <= week_end
         ).order_by(Timetable.date, Timetable.start_time).all()
 
-    # Handle adding a new timetable entry
+    # Handle adding a timetable entry
     if request.method == 'POST' and "action" in request.form:
         action = request.form["action"]
 
@@ -296,6 +315,7 @@ def admin_timetable():
                     db.session.commit()
                     flash("Timetable entry added successfully with repeat cycle!", "success")
 
+                    # Redirect to prevent form resubmission on refresh
                     return redirect(url_for('admin_timetable'))
 
                 else:
@@ -310,18 +330,61 @@ def admin_timetable():
                 db.session.commit()
                 flash(f"Timetable entry deleted!", "info")
 
+            # Redirect after deletion to prevent duplicate deletions on reload
+            return redirect(url_for('admin_timetable'))
+
+        elif action == "assign_by_subject":
+            subject_id = request.form["subject_id"]
+            date = datetime.strptime(request.form["date"], '%Y-%m-%d').date()
+            start_time = datetime.strptime(request.form["start_time"], '%H:%M').time()
+            end_time = datetime.strptime(request.form["end_time"], '%H:%M').time()
+            room_id = request.form["room_id"]
+            room = Room.query.get(room_id)
+            subject = Subject.query.get(subject_id)
+
+            if not subject or not room:
+                flash("Invalid subject or room selection.", "danger")
+                return redirect(url_for('admin_timetable'))
+
+            # Retrieve users assigned to the subject
+            assigned_users = AssignedSubject.query.filter_by(subject_id=subject_id).all()
+            assigned_user_ids = {assignment.user_id for assignment in assigned_users}
+
+            # Get excluded users from the form
+            excluded_user_ids = set(map(int, request.form.getlist("excluded_users")))
+
+            # Assign timetable entry to all non-excluded users
+            for user_id in assigned_user_ids - excluded_user_ids:
+                user = User.query.get(user_id)
+                teacher = User.query.get(request.form["teacher_id"])
+
+                new_entry = Timetable(
+                    user_id=user_id,
+                    date=date,
+                    subject=subject.name,
+                    teacher=teacher.username if user.role == "student" else user.username,
+                    start_time=start_time,
+                    end_time=end_time,
+                    room=room.name
+                )
+                db.session.add(new_entry)
+
+            db.session.commit()
+            flash(f"Timetable entry added for all assigned users of '{subject.name}'!", "success")
             return redirect(url_for('admin_timetable'))
 
     return render_template(
-        'admin_timetable.html', 
-        users=users, 
-        staff_users=staff_users, 
-        rooms=rooms,
-        timetable_entries=timetable_entries, 
-        week_range=week_range, 
-        assigned_subjects=assigned_subjects, 
-        selected_user=selected_user
+        "admin_timetable.html",
+        users=users, staff_users=staff_users, rooms=rooms,
+        subjects=subjects, selected_user=selected_user,
+        selected_subject=selected_subject, timetable=timetable_entries,
+        assigned_subjects=assigned_subjects, subject_assignees=subject_assignees,
+        year_groups=year_groups, week_range=week_range, week_start=week_start, timedelta=timedelta
     )
+
+
+
+
 
 
 

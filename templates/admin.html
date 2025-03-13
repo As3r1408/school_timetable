@@ -12,10 +12,11 @@
         Username: <input type="text" name="username" required><br>
         Password: <input type="password" name="password" required><br>
         Role: 
-        <select name="role">
+        <select name="role" id="roleSelect" onchange="toggleYearGroup()">
             <option value="student">Student</option>
             <option value="staff">Staff</option>
         </select><br>
+        Year Group: <input type="text" name="year_group" id="yearGroupInput"><br>
         <button type="submit">Create User</button>
     </form>
 
@@ -55,7 +56,17 @@
 
     <p><a href="{{ url_for('dashboard') }}">Back to Dashboard</a></p>
 
-    
-
+    <script>
+        function toggleYearGroup() {
+            var roleSelect = document.getElementById("roleSelect");
+            var yearGroupInput = document.getElementById("yearGroupInput");
+            if (roleSelect.value === "student") {
+                yearGroupInput.style.display = "inline";
+            } else {
+                yearGroupInput.style.display = "none";
+            }
+        }
+        toggleYearGroup();  // Initialize on page load
+    </script>
 </body>
 </html>

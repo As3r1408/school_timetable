@@ -11,7 +11,7 @@ class User(db.Model, UserMixin):
     username = db.Column(db.String(50), unique=True, nullable=False)
     password = db.Column(db.String(100), nullable=False)
     role = db.Column(db.String(10), nullable=False)  # 'student', 'staff', 'admin'
-
+    year_group = db.Column(db.String(10), nullable=True)
 # School Settings Model (For Week A/B System)
 class SchoolSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
