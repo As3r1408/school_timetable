@@ -32,13 +32,14 @@ class Timetable(db.Model):
 
     user = db.relationship('User', backref='timetables')
 
-    def __init__(self, user_id, date, subject, teacher, start_time, end_time, room=None):
+    def __init__(self, user_id, date, subject, teacher, start_time, end_time, room=None,week=None):
         self.user_id = user_id
         self.subject = subject
         self.teacher = teacher
         self.start_time = start_time
         self.end_time = end_time
         self.room = room  # Room is optional
+        self.week = week if week else "current"  # Default to 'current' if no week is provided
 
         # ✅ Ensure `date` is always a `datetime.date` object
         if isinstance(date, str):  

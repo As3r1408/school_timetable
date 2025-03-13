@@ -1,9 +1,10 @@
 import os
-from datetime import datetime,timedelta
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from datetime import datetime, timedelta
+from flask import Flask, jsonify, render_template, request, redirect, url_for, session, flash
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import db, User, Timetable, SchoolSettings, Room, Subject, AssignedSubject 
+from models import db, User, Timetable, SchoolSettings, Room, Subject, AssignedSubject
+
 
 app = Flask(__name__)
 
@@ -17,7 +18,7 @@ app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'default_secret_ke
 # Initialize database
 db.init_app(app)
 
-# Create tables
+
 
 def initialize_school_settings():
     settings = SchoolSettings.query.first()
@@ -39,7 +40,6 @@ def create_default_admin():
 @app.route('/')
 def home():
     return render_template('home.html')
-
 
 
 # Route for login
@@ -189,12 +189,14 @@ def admin():
     users = User.query.filter(User.role != "admin").all()  # Exclude admin from list
     return render_template('admin.html', users=users, use_week_ab=school_settings.use_week_ab)
 
+
 @app.route('/admin_timetable', methods=['GET', 'POST'])
 def admin_timetable():
     if 'user_id' not in session or session['role'] != 'admin':
         flash("Access denied. Admins only.", "danger")
         return redirect(url_for('dashboard'))
 
+    # Fetch all users (excluding admin), staff users, and rooms for selection
     users = User.query.filter(User.role != "admin").all()
     staff_users = User.query.filter_by(role="staff").all()
     rooms = Room.query.all()
@@ -264,6 +266,7 @@ def admin_timetable():
             selected_user = User.query.get(selected_user_id)
 
             if selected_user:
+                # Get timetable entry details from the form
                 date = datetime.strptime(request.form["date"], '%Y-%m-%d').date()
                 subject_id = request.form["subject_id"]
                 teacher_id = request.form["teacher_id"]
@@ -271,37 +274,61 @@ def admin_timetable():
                 end_time = datetime.strptime(request.form["end_time"], '%H:%M').time()
                 room_id = request.form["room_id"]
 
+                repeat_cycle = request.form.get("repeat_cycle", "0")
+                try:
+                    repeat_cycle = int(repeat_cycle)
+                except ValueError:
+                    repeat_cycle = 0  # Dropdown value for repeat cycle duration
+                exclude_users = request.form.getlist("exclude_users")  # List of users to exclude from entry
+                apply_to_all = 'apply_to_all' in request.form  # Checkbox for applying to all assigned users
+
+                # Fetch the related data from the database
                 teacher = User.query.get(teacher_id)
                 subject = Subject.query.get(subject_id)
                 room = Room.query.get(room_id)
 
                 if subject and teacher and room:
-                    new_entry = Timetable(
-                        user_id=selected_user.id,
-                        date=date,
-                        subject=subject.name,
-                        teacher=teacher.username,
-                        start_time=start_time,
-                        end_time=end_time,
-                        room=room.name
-                    )
-                    db.session.add(new_entry)
+                    # If 'apply_to_all' is checked, add the entry for all users assigned to the subject
+                    users_to_add = [selected_user]
+                    if apply_to_all:
+                        users_to_add = User.query.join(AssignedSubject).filter(
+                            AssignedSubject.subject_id == subject.id,
+                            ~User.id.in_(exclude_users)  # Exclude selected users
+                        ).all()
+                # Add the timetable entry for each selected user (based on repeat cycle duration)
+                    for user in users_to_add:
+                        current_date = date
+                        for _ in range(5):  # Repeat up to 5 times (configurable)
+                            new_entry = Timetable(
+                            user_id=user.id,
+                            date=current_date,
+                            subject=subject.name,
+                            teacher=teacher.username,
+                            start_time=start_time,
+                            end_time=end_time,
+                            room=room.name,
+                            week=week_start.isocalendar()[1]
+                         )
+                            db.session.add(new_entry)
+                            current_date += timedelta(weeks=repeat_cycle)  # Apply repeat cycle
+
                     db.session.commit()
-                    flash("Timetable entry added!", "success")
+                    flash("Timetable entry added successfully with repeat cycle!", "success")
 
                     # Redirect to prevent form resubmission on refresh
                     return redirect(url_for('admin_timetable'))
 
                 else:
                     flash("Invalid data. Please ensure all fields are selected.", "danger")
-
+                    
         elif action == "delete_entry":
             entry_id = request.form["entry_id"]
             entry = Timetable.query.get(entry_id)
+
             if entry:
                 db.session.delete(entry)
                 db.session.commit()
-                flash("Timetable entry deleted.", "info")
+                flash(f"Timetable entry deleted!", "info")
 
             # Redirect after deletion to prevent duplicate deletions on reload
             return redirect(url_for('admin_timetable'))
@@ -360,7 +387,7 @@ def admin_timetable():
 
 
 
-    
+
 @app.route('/admin_subjects', methods=['GET', 'POST'])
 def admin_subjects():
     if 'user_id' not in session or session['role'] != 'admin':
@@ -420,6 +447,12 @@ def admin_subjects():
     return render_template("admin_subjects.html", subjects=subjects, rooms=rooms, users=users)
 
 
+@app.route('/get_assigned_users/<int:subject_id>')
+def get_assigned_users(subject_id):
+    assigned_users = AssignedSubject.query.filter_by(subject_id=subject_id).all()
+    users = [User.query.get(a.user_id) for a in assigned_users]
+    
+    return jsonify([{"id": u.id, "username": u.username} for u in users])
 
 
 # Make sure this is at the BOTTOM
