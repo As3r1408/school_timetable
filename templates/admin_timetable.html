@@ -18,13 +18,51 @@
             form.submit();
         }
 
-        // Show/hide exclude popup
+        function showEditByUser() {
+            document.getElementById("editByUser").style.display = "block";
+            document.getElementById("editBySubject").style.display = "none";
+        }
+
+        function showEditBySubject() {
+            document.getElementById("editByUser").style.display = "none";
+            document.getElementById("editBySubject").style.display = "block";
+        }
+
+        function showUserTimetable(userId) {
+            let form = document.createElement("form");
+            form.method = "POST";
+            form.style.display = "none";
+
+            let input = document.createElement("input");
+            input.type = "hidden";
+            input.name = "user_id";
+            input.value = userId;
+
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
+        }
+
+        function showSubjectTimetable(subjectId) {
+            let form = document.createElement("form");
+            form.method = "POST";
+            form.style.display = "none";
+
+            let input = document.createElement("input");
+            input.type = "hidden";
+            input.name = "subject_id";
+            input.value = subjectId;
+
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
+        }
+
         function toggleExcludePopup() {
             let popup = document.getElementById("excludePopup");
             popup.style.display = (popup.style.display === "block") ? "none" : "block";
         }
 
-        // Filter users in exclude menu
         function filterUsers() {
             let search = document.getElementById("searchExclude").value.toLowerCase();
             let users = document.querySelectorAll(".exclude-user");
@@ -33,34 +71,6 @@
                 let name = user.getAttribute("data-name").toLowerCase();
                 user.style.display = name.includes(search) ? "block" : "none";
             });
-        }
-
-        // Handle selection logic
-        function handleSelection() {
-            let userSelect = document.getElementById("userSelect");
-            let subjectSelect = document.getElementById("subjectSelect");
-            let timetableForm = document.getElementById("timetableForm");
-            let excludeButton = document.getElementById("excludeButton");
-
-            if (subjectSelect.value) {
-                // If subject is selected, hide user select and show timetable form
-                userSelect.disabled = true;
-                timetableForm.style.display = "block";
-                excludeButton.style.display = "inline";
-            } else {
-                userSelect.disabled = false;
-                timetableForm.style.display = "none";
-                excludeButton.style.display = "none";
-            }
-        }
-
-        function resetSelection() {
-            document.getElementById("userSelect").value = "";
-            document.getElementById("subjectSelect").value = "";
-            document.getElementById("userSelect").disabled = false;
-            document.getElementById("timetableForm").style.display = "none";
-            document.getElementById("excludeButton").style.display = "none";
-            document.getElementById("excludePopup").style.display = "none";
         }
     </script>
     <style>
@@ -80,30 +90,76 @@
 <body>
     <h2>Admin - Manage Timetables</h2>
 
-    <!-- Step 1: Select User or Subject-->
-    <h3>Select a User or Subject</h3>
-    <form method="post">
-        <input type="hidden" name="action" value="select">
+    <!-- Initial Buttons -->
+    <button onclick="showEditByUser()">Edit by User</button>
+    <button onclick="showEditBySubject()">Edit by Subject/Group</button>
 
-        <select id="userSelect" name="user_id" onchange="resetSelection()">
-            <option value="">Select User</option>
+    <!-- Edit by User Section -->
+    <div id="editByUser" style="display: none;">
+        <h3>Edit by User</h3>
+        <input type="text" id="searchUser" placeholder="Search users...">
+        <table border="1">
+            <tr>
+                <th>Student Name</th>
+                <th>Year Group</th>
+                <th>Subjects</th>
+                <th>Edit Timetable</th>
+            </tr>
             {% for user in users %}
-                <option value="{{ user.id }}" {% if selected_user and selected_user.id == user.id %}selected{% endif %}>
-                    {{ user.username }} ({{ user.role }})
-                </option>
+                <tr>
+                    <td>{{ user.username }}</td>
+                    <td>{{ user.year_group }}</td>
+                    <td>
+                        <button type="button" onclick="alert('Subjects: {{ user.assigned_subjects|map(attribute='subject.name')|join(', ') }}')">View Subjects</button>
+                    </td>
+                    <td>
+                        <button type="button" onclick="showUserTimetable({{ user.id }})">Edit Timetable</button>
+                    </td>
+                </tr>
             {% endfor %}
-        </select>
+        </table>
+    </div>
 
-        <select id="subjectSelect" name="subject_id" onchange="handleSelection()">
-            <option value="">Select Subject</option>
+    <!-- Edit by Subject/Group Section -->
+    <div id="editBySubject" style="display: none;">
+        <h3>Edit by Subject/Group</h3>
+        <input type="text" id="searchSubject" placeholder="Search subjects...">
+        <table border="1">
+            <tr>
+                <th>Subject/Year Group</th>
+                <th>Type</th>
+                <th>Staff Members</th>
+                <th>Students</th>
+                <th>Edit Timetables</th>
+            </tr>
             {% for subject in subjects %}
-                <option value="{{ subject.id }}">{{ subject.name }}</option>
+                <tr>
+                    <td>{{ subject.name }}</td>
+                    <td>Subject</td>
+                    <td>{{ subject.assigned_users|selectattr('user.role', 'equalto', 'staff')|map(attribute='user.username')|join(', ') }}</td>
+                    <td>
+                        <button type="button" onclick="alert('Students: {{ subject.assigned_users|selectattr('user.role', 'equalto', 'student')|map(attribute='user.username')|join(', ') }}')">View Students</button>
+                    </td>
+                    <td>
+                        <button type="button" onclick="showSubjectTimetable({{ subject.id }})">Edit Timetables</button>
+                    </td>
+                </tr>
             {% endfor %}
-        </select>
-
-        <button type="button" onclick="resetSelection()">Reset</button>
-        <button type="submit">Select</button>
-    </form>
+            {% for year_group in year_groups %}
+                <tr>
+                    <td>{{ year_group }}</td>
+                    <td>Year Group</td>
+                    <td></td>
+                    <td>
+                        <button type="button" onclick="alert('Students: {{ users|selectattr('year_group', 'equalto', year_group)|map(attribute='username')|join(', ') }}')">View Students</button>
+                    </td>
+                    <td>
+                        <button type="button" onclick="showSubjectTimetable(year_group)">Edit Timetables</button>
+                    </td>
+                </tr>
+            {% endfor %}
+        </table>
+    </div>
 
     {% if selected_user or selected_subject %}
         <h3>
@@ -159,31 +215,40 @@
         {% endif %}
 
         <!-- Mass Timetable Entry for Subject Assignees -->
-        <form id="timetableForm" method="post" style="display: none;">
-            <input type="hidden" name="action" value="add_entry_subject">
-            <input type="hidden" name="subject_id" value="{{ selected_subject.id }}">
+        {% if selected_subject %}
+            <form id="timetableForm" method="post">
+                <input type="hidden" name="action" value="assign_by_subject">
+                <input type="hidden" name="subject_id" value="{{ selected_subject.id }}">
 
-            Date: <input type="date" name="date" required><br>
-            Start Time: <input type="time" name="start_time" required><br>
-            End Time: <input type="time" name="end_time" required><br>
+                Date: <input type="date" name="date" required><br>
+                Start Time: <input type="time" name="start_time" required><br>
+                End Time: <input type="time" name="end_time" required><br>
 
-            Select Teacher:
-            <select name="teacher_id" required>
-                {% for staff in staff_users %}
-                    <option value="{{ staff.id }}">{{ staff.username }}</option>
-                {% endfor %}
-            </select><br>
+                Select Subject:
+                <select name="subject_id" required>
+                    {% for subject in subjects %}
+                        <option value="{{ subject.id }}">{{ subject.name }}</option>
+                    {% endfor %}
+                </select><br>
 
-            Select Room:
-            <select name="room_id" required>
-                {% for room in rooms %}
-                    <option value="{{ room.id }}">{{ room.name }}</option>
-                {% endfor %}
-            </select><br>
+                Select Teacher:
+                <select name="teacher_id" required>
+                    {% for staff in staff_users %}
+                        <option value="{{ staff.id }}">{{ staff.username }}</option>
+                    {% endfor %}
+                </select><br>
 
-            <button type="button" id="excludeButton" style="display: none;" onclick="toggleExcludePopup()">Exclude Users</button>
-            <button type="submit">Add Entry</button>
-        </form>
+                Select Room:
+                <select name="room_id" required>
+                    {% for room in rooms %}
+                        <option value="{{ room.id }}">{{ room.name }}</option>
+                    {% endfor %}
+                </select><br>
+
+                <button type="button" id="excludeButton" onclick="toggleExcludePopup()">Exclude Users</button>
+                <button type="submit">Add Entry</button>
+            </form>
+        {% endif %}
 
         <!-- Exclude Users Popup -->
         <div id="excludePopup">
@@ -191,8 +256,8 @@
             <input type="text" id="searchExclude" onkeyup="filterUsers()" placeholder="Search users...">
             <ul>
                 {% for user in subject_assignees %}
-                    <li class="exclude-user" data-name="{{ user.username }}">
-                        <input type="checkbox" name="exclude_users" value="{{ user.id }}"> {{ user.username }} ({{ user.role }})
+                    <li class="exclude-user" data-name="{{ user.user.username }}">
+                        <input type="checkbox" name="excluded_users" value="{{ user.user_id }}"> {{ user.user.username }} ({{ user.user.role }})
                     </li>
                 {% endfor %}
             </ul>
@@ -200,42 +265,41 @@
         </div>
     {% endif %}
 
-        <!-- Step 3: Display Current Week's Timetable -->
-        <h3>Timetable for {{ week_range }}</h3>
-        {% if timetable %}
-            <table border="1">
-                <tr>
-                    {% for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] %}
-                        <th>{{ day }} - {{ (week_start + timedelta(days=loop.index0)).strftime('%d/%m') }}</th>
-                    {% endfor %}
-                </tr>
-                <tr>
-                    {% for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] %}
-                        <td>
-                            <ul>
-                                {% for entry in timetable if entry.date.strftime('%A') == day %}
-                                    <li>
-                                        {{ entry.start_time.strftime('%H:%M') }} - {{ entry.end_time.strftime('%H:%M') }}<br>
-                                        <strong>{{ entry.subject }}</strong><br>
-                                        {{ entry.teacher }}<br>
-                                        Room: {{ entry.room if entry.room else "Not assigned" }}<br>
-                                        <form method="post" style="display:inline;">
-                                            <input type="hidden" name="action" value="delete_entry">
-                                            <input type="hidden" name="entry_id" value="{{ entry.id }}">
-                                            <button type="submit" onclick="return confirm('Are you sure?')">Delete</button>
-                                        </form>
-                                        <hr>
-                                    </li>
-                                {% endfor %}
-                            </ul>
-                        </td>
-                    {% endfor %}
-                </tr>
-            </table>
-        {% else %}
-            <p>No timetable entries for this week.</p>
-        {% endif %}
-
+    <!-- Step 3: Display Current Week's Timetable -->
+    <h3>Timetable for {{ week_range }}</h3>
+    {% if timetable %}
+        <table border="1">
+            <tr>
+                {% for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] %}
+                    <th>{{ day }} - {{ (week_start + timedelta(days=loop.index0)).strftime('%d/%m') }}</th>
+                {% endfor %}
+            </tr>
+            <tr>
+                {% for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] %}
+                    <td>
+                        <ul>
+                            {% for entry in timetable if entry.date.strftime('%A') == day %}
+                                <li>
+                                    {{ entry.start_time.strftime('%H:%M') }} - {{ entry.end_time.strftime('%H:%M') }}<br>
+                                    <strong>{{ entry.subject }}</strong><br>
+                                    {{ entry.teacher }}<br>
+                                    Room: {{ entry.room if entry.room else "Not assigned" }}<br>
+                                    <form method="post" style="display:inline;">
+                                        <input type="hidden" name="action" value="delete_entry">
+                                        <input type="hidden" name="entry_id" value="{{ entry.id }}">
+                                        <button type="submit" onclick="return confirm('Are you sure?')">Delete</button>
+                                    </form>
+                                    <hr>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </td>
+                {% endfor %}
+            </tr>
+        </table>
+    {% else %}
+        <p>No timetable entries for this week.</p>
+    {% endif %}
 
     <p><a href="{{ url_for('admin') }}">Back to Admin Panel</a></p>
 </body>
