@@ -29,19 +29,20 @@ class Timetable(db.Model):
     start_time = db.Column(db.Time, nullable=False)
     end_time = db.Column(db.Time, nullable=False)
     room = db.Column(db.String(100), nullable=True)
+    entry_id = db.Column(db.String(100), unique=True, nullable=False)
 
     user = db.relationship('User', backref='timetables')
 
-    def __init__(self, user_id, date, subject, teacher, start_time, end_time, room=None,week=None):
+    def __init__(self, user_id, date, subject, teacher, start_time, end_time, room=None):
         self.user_id = user_id
         self.subject = subject
         self.teacher = teacher
         self.start_time = start_time
         self.end_time = end_time
         self.room = room  # Room is optional
-        self.week = week if week else "current"  # Default to 'current' if no week is provided
 
-        # ✅ Ensure `date` is always a `datetime.date` object
+
+        # Ensure `date` is always a `datetime.date` object
         if isinstance(date, str):  
             self.date = datetime.strptime(date, '%Y-%m-%d').date()  
         elif isinstance(date, datetime):
@@ -51,13 +52,14 @@ class Timetable(db.Model):
         else:
             raise ValueError("Invalid date format. Expected a string, datetime, or date object.")
 
-        # ✅ Fix: Ensure Monday entries are assigned to the correct week
+        # Fix: Ensure Monday entries are assigned to the correct week
         self.week = self.date.isocalendar()[1]
         if self.date.weekday() == 0:  # If it's Monday
             previous_sunday = self.date - timedelta(days=1)
             self.week = previous_sunday.isocalendar()[1] + 1
 
         self.day_of_week = self.date.strftime('%A')  # Convert date to day name
+        self.entry_id = f"{self.user_id}_{self.date}_{self.start_time}_{self.end_time}_{self.subject}_{self.teacher}_{self.room}"
 
 
 # Subject Model
