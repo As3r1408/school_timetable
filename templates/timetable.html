@@ -18,19 +18,15 @@
     {% if timetable %}
         <table border="1">
             <tr>
-                <th>Monday</th>
-                <th>Tuesday</th>
-                <th>Wednesday</th>
-                <th>Thursday</th>
-                <th>Friday</th>
-                <th>Saturday</th>
-                <th>Sunday</th>
+                {% for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] %}
+                    <th>{{ day }} - {{ (week_start + timedelta(days=loop.index0)).strftime('%d/%m') }}</th>
+                {% endfor %}
             </tr>
             <tr>
                 {% for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] %}
                     <td>
                         <ul>
-                            {% for entry in timetable if entry.date.weekday() == loop.index0 %}
+                            {% for entry in timetable if entry.date.strftime('%A') == day %}
                                 <li>
                                     {{ entry.start_time.strftime('%H:%M') }} - {{ entry.end_time.strftime('%H:%M') }}<br>
                                     <strong>{{ entry.subject }}</strong><br>
