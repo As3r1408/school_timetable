@@ -2,7 +2,6 @@ from datetime import datetime, date as dt_date, timedelta
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 
-
 db = SQLAlchemy()
 
 # User Model (Admin, Staff, Students)
@@ -12,15 +11,21 @@ class User(db.Model, UserMixin):
     password = db.Column(db.String(100), nullable=False)
     role = db.Column(db.String(10), nullable=False)  # 'student', 'staff', 'admin'
     year_group = db.Column(db.String(10), nullable=True)
+
 # School Settings Model (For Week A/B System)
 class SchoolSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     use_week_ab = db.Column(db.Boolean, default=False)  # Default: No A/B week system
 
+# Association table for many-to-many relationship between users and timetable entries
+user_timetable = db.Table('user_timetable',
+    db.Column('user_id', db.Integer, db.ForeignKey('user.id'), primary_key=True),
+    db.Column('timetable_id', db.Integer, db.ForeignKey('timetable.id'), primary_key=True)
+)
+
 # Timetable Model
 class Timetable(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     date = db.Column(db.Date, nullable=False)
     week = db.Column(db.Integer, nullable=False)
     day_of_week = db.Column(db.String(10), nullable=False)
@@ -29,12 +34,9 @@ class Timetable(db.Model):
     start_time = db.Column(db.Time, nullable=False)
     end_time = db.Column(db.Time, nullable=False)
     room = db.Column(db.String(100), nullable=True)
-    entry_id = db.Column(db.String(100), unique=True, nullable=False)
+    users = db.relationship('User', secondary=user_timetable, backref=db.backref('timetables', lazy='dynamic'))
 
-    user = db.relationship('User', backref='timetables')
-
-    def __init__(self, user_id, date, subject, teacher, start_time, end_time, room=None):
-        self.user_id = user_id
+    def __init__(self, date, subject, teacher, start_time, end_time, room=None):
         self.subject = subject
         self.teacher = teacher
         self.start_time = start_time
@@ -58,9 +60,6 @@ class Timetable(db.Model):
             self.week = previous_sunday.isocalendar()[1] + 1
 
         self.day_of_week = self.date.strftime('%A')  # Convert date to day name
-        self.entry_id = f"{self.user_id}_{self.date}_{self.start_time}_{self.end_time}_{self.subject}_{self.teacher}_{self.room}"
-
-
 
 # Subject Model
 class Subject(db.Model):

@@ -3,8 +3,7 @@ from datetime import datetime, timedelta
 from flask import Flask, jsonify, render_template, request, redirect, url_for, session, flash
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import db, User, Timetable, SchoolSettings, Room, Subject, AssignedSubject
-
+from models import db, User, Timetable, SchoolSettings, Room, Subject, AssignedSubject, user_timetable
 
 app = Flask(__name__)
 
@@ -17,8 +16,6 @@ app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'default_secret_ke
 
 # Initialize database
 db.init_app(app)
-
-
 
 def initialize_school_settings():
     settings = SchoolSettings.query.first()
@@ -41,7 +38,6 @@ def create_default_admin():
 def home():
     return render_template('home.html')
 
-
 # Route for login
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -62,7 +58,6 @@ def login():
 
     return render_template('login.html')
 
-
 # Route for logout
 @app.route('/logout')
 def logout():
@@ -70,7 +65,6 @@ def logout():
     session.pop('role', None)
     flash("Logged out successfully.", "info")
     return redirect(url_for('login'))
-
 
 # Route for dashboard
 @app.route('/dashboard')
@@ -91,7 +85,7 @@ def display_timetable(user, week=None, permission_level=None):
     week_range = f"{week_start.strftime('%a %d/%m')} - {week_end.strftime('%a %d/%m')}"
 
     timetable_entries = Timetable.query.filter(
-        Timetable.user_id == user.id,
+        Timetable.users.any(id=user.id),
         Timetable.date >= week_start,
         Timetable.date <= week_end
     ).order_by(Timetable.date, Timetable.start_time).all()
@@ -120,7 +114,6 @@ def timetable():
 
     return display_timetable(user, week_start, session['role'])
 
-
 @app.route('/delete_timetable/<int:id>', methods=['POST'])
 def delete_timetable(id):
     if 'user_id' not in session:
@@ -138,7 +131,6 @@ def delete_timetable(id):
         flash("You do not have permission to delete this entry.", "danger")
 
     return redirect(url_for('admin_timetable'))
-
 
 @app.route('/admin', methods=['GET', 'POST'])
 def admin():
@@ -218,8 +210,6 @@ def admin_timetable():
     assigned_subjects = []
     subject_assignees = []
     year_group_users = []
-    
-    
 
     # Ensure the week_offset exists in session
     if "week_offset" not in session:
@@ -264,7 +254,7 @@ def admin_timetable():
     # Fetch timetable for the selected user, subject, or year group and current week
     if selected_user:
         timetable_entries = Timetable.query.filter(
-            Timetable.user_id == selected_user.id,
+            Timetable.users.any(id=selected_user.id),
             Timetable.date >= week_start,
             Timetable.date <= week_end
         ).order_by(Timetable.date, Timetable.start_time).all()
@@ -272,7 +262,7 @@ def admin_timetable():
         # Fetch common timetable entries for all assignees of the selected subject
         assignee_ids = [assignment.user_id for assignment in subject_assignees]
         timetable_entries = Timetable.query.filter(
-            Timetable.user_id.in_(assignee_ids),
+            Timetable.users.any(User.id.in_(assignee_ids)),
             Timetable.subject == selected_subject.name,
             Timetable.date >= week_start,
             Timetable.date <= week_end
@@ -281,7 +271,7 @@ def admin_timetable():
         # Fetch timetable entries for all users in the selected year group
         year_group_user_ids = [user.id for user in year_group_users]
         timetable_entries = Timetable.query.filter(
-            Timetable.user_id.in_(year_group_user_ids),
+            Timetable.users.any(User.id.in_(year_group_user_ids)),
             Timetable.date >= week_start,
             Timetable.date <= week_end
         ).order_by(Timetable.date, Timetable.start_time).all()
@@ -308,7 +298,6 @@ def admin_timetable():
 
                 if subject and teacher and room:
                     new_entry = Timetable(
-                        user_id=selected_user.id,
                         date=date,
                         subject=subject.name,
                         teacher=teacher.username,
@@ -316,6 +305,7 @@ def admin_timetable():
                         end_time=end_time,
                         room=room.name
                     )
+                    new_entry.users.append(selected_user)
                     db.session.add(new_entry)
                     db.session.commit()
                     flash("Timetable entry added!", "success")
@@ -357,21 +347,22 @@ def admin_timetable():
             # Get excluded users from the form
             excluded_user_ids = set(map(int, request.form.getlist("excluded_users")))
 
+            # Create a single timetable entry
+            teacher = User.query.get(request.form["teacher_id"])
+            new_entry = Timetable(
+                date=date,
+                subject=subject.name,
+                teacher=teacher.username,
+                start_time=start_time,
+                end_time=end_time,
+                room=room.name
+            )
+            db.session.add(new_entry)
+
             # Assign timetable entry to all non-excluded users
             for user_id in assigned_user_ids - excluded_user_ids:
                 user = User.query.get(user_id)
-                teacher = User.query.get(request.form["teacher_id"])
-
-                new_entry = Timetable(
-                    user_id=user_id,
-                    date=date,
-                    subject=subject.name,
-                    teacher=teacher.username if user.role == "student" else user.username,
-                    start_time=start_time,
-                    end_time=end_time,
-                    room=room.name
-                )
-                db.session.add(new_entry)
+                new_entry.users.append(user)
 
             db.session.commit()
             flash(f"Timetable entry added for all assigned users of '{subject.name}'!", "success")
@@ -398,21 +389,22 @@ def admin_timetable():
             # Get excluded users from the form
             excluded_user_ids = set(map(int, request.form.getlist("excluded_users")))
 
+            # Create a single timetable entry
+            teacher = User.query.get(request.form["teacher_id"])
+            new_entry = Timetable(
+                date=date,
+                subject=subject.name,
+                teacher=teacher.username,
+                start_time=start_time,
+                end_time=end_time,
+                room=room.name
+            )
+            db.session.add(new_entry)
+
             # Assign timetable entry to all non-excluded users
             for user_id in year_group_user_ids - excluded_user_ids:
                 user = User.query.get(user_id)
-                teacher = User.query.get(request.form["teacher_id"])
-
-                new_entry = Timetable(
-                    user_id=user_id,
-                    date=date,
-                    subject=subject.name,
-                    teacher=teacher.username if user.role == "student" else user.username,
-                    start_time=start_time,
-                    end_time=end_time,
-                    room=room.name
-                )
-                db.session.add(new_entry)
+                new_entry.users.append(user)
 
             db.session.commit()
             flash(f"Timetable entry added for all users in year group '{year_group}'!", "success")
@@ -428,16 +420,7 @@ def admin_timetable():
         year_group_users=year_group_users,
         week_range=week_range, week_start=week_start, timedelta=timedelta
     )
-
-
-
-
-
-
-
-
-
-
+          
 
 @app.route('/admin_subjects', methods=['GET', 'POST'])
 def admin_subjects():
@@ -503,7 +486,6 @@ def get_assigned_subjects(user_id):
     subjects = [Subject.query.get(a.subject_id) for a in assigned_subjects]
     return jsonify([{"id": s.id, "name": s.name} for s in subjects])
 
-
 @app.route('/get_assigned_users/<int:subject_id>')
 def get_assigned_users(subject_id):
     assigned_users = AssignedSubject.query.filter_by(subject_id=subject_id).all()
@@ -514,9 +496,6 @@ def get_assigned_users(subject_id):
 def get_students_by_year_group(year_group):
     students = User.query.filter_by(year_group=year_group, role='student').all()
     return jsonify([{"id": u.id, "username": u.username} for u in students])
-
-
-
 
 # Make sure this is at the BOTTOM
 if __name__ == "__main__":
