@@ -338,12 +338,15 @@ def admin_timetable():
             if not subject or not room:
                 flash("Invalid subject or room selection.", "danger")
                 return redirect(url_for('admin_timetable'))
-
+            
+            # Get the original subject ID to find assigned users
+            original_subject_id = request.form["original_subject_id"]
+            
             # Retrieve users assigned to the selected subject
-            assigned_users = AssignedSubject.query.filter_by(subject_id=subject_id).all()
+            assigned_users = AssignedSubject.query.filter_by(subject_id=original_subject_id).all()
             assigned_user_ids = {assignment.user_id for assignment in assigned_users}
 
-            # Create a single timetable entry
+            # Create a single timetable entry with the NEW selected subject
             teacher = User.query.get(request.form["teacher_id"])
             new_entry = Timetable(
                 date=date,
@@ -361,9 +364,13 @@ def admin_timetable():
                 new_entry.users.append(user)
 
             db.session.commit()
+            
+            # Store the original subject ID in session to maintain context
+            session["selected_subject_id"] = original_subject_id
+    
             flash(f"Timetable entry added for all assigned users of '{subject.name}'!", "success")
             return redirect(url_for('admin_timetable'))
-
+        
         elif action == "assign_by_year_group":
             year_group = request.form["year_group"]
             date = datetime.strptime(request.form["date"], '%Y-%m-%d').date()
