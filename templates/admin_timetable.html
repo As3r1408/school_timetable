@@ -81,21 +81,6 @@
             form.submit();
         }
 
-        function toggleExcludePopup() {
-            let popup = document.getElementById("excludePopup");
-            popup.style.display = (popup.style.display === "block") ? "none" : "block";
-        }
-
-        function filterUsers() {
-            let search = document.getElementById("searchExclude").value.toLowerCase();
-            let users = document.querySelectorAll(".exclude-user");
-
-            users.forEach(user => {
-                let name = user.getAttribute("data-name").toLowerCase();
-                user.style.display = name.includes(search) ? "block" : "none";
-            });
-        }
-
         function showSubjects(userId) {
             fetch(`/get_assigned_subjects/${userId}`)
                 .then(response => response.json())
@@ -141,30 +126,6 @@
                 });
         }
     </script>
-    <style>
-        #excludePopup {
-            display: none;
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: white;
-            padding: 20px;
-            border: 1px solid black;
-            box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
-        }
-        #subjectsMenu, #studentsMenu {
-            display: none;
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: white;
-            padding: 20px;
-            border: 1px solid black;
-            box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
-        }
-    </style>
 </head>
 <body>
     <h2>Admin - Manage Timetables</h2>
@@ -253,14 +214,14 @@
     </div>
 
     <!-- Subjects Menu -->
-    <div id="subjectsMenu">
+    <div id="subjectsMenu" style="display: none;">
         <h3>Assigned Subjects</h3>
         <ul id="subjectsList"></ul>
         <button type="button" onclick="document.getElementById('subjectsMenu').style.display='none'">Close</button>
     </div>
 
     <!-- Students Menu -->
-    <div id="studentsMenu">
+    <div id="studentsMenu" style="display: none;">
         <h3>Assigned Students</h3>
         <ul id="studentsList"></ul>
         <button type="button" onclick="document.getElementById('studentsMenu').style.display='none'">Close</button>
@@ -352,7 +313,6 @@
                     {% endfor %}
                 </select><br>
 
-                <button type="button" id="excludeButton" onclick="toggleExcludePopup()">Exclude Users</button>
                 <button type="submit">Add Entry</button>
             </form>
         {% endif %}
@@ -388,24 +348,9 @@
                     {% endfor %}
                 </select><br>
 
-                <button type="button" id="excludeButton" onclick="toggleExcludePopup()">Exclude Users</button>
                 <button type="submit">Add Entry</button>
             </form>
         {% endif %}
-
-        <!-- Exclude Users Popup -->
-        <div id="excludePopup">
-            <h3>Exclude Users</h3>
-            <input type="text" id="searchExclude" onkeyup="filterUsers()" placeholder="Search users...">
-            <ul>
-                {% for user in year_group_users %}
-                    <li class="exclude-user" data-name="{{ user.username }}">
-                        <input type="checkbox" name="excluded_users" value="{{ user.id }}"> {{ user.username }} ({{ user.role }})
-                    </li>
-                {% endfor %}
-            </ul>
-            <button type="button" onclick="toggleExcludePopup()">Close</button>
-        </div>
     {% endif %}
 
     <!-- Step 3: Display Current Week's Timetable -->

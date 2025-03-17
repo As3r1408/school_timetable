@@ -263,7 +263,6 @@ def admin_timetable():
         assignee_ids = [assignment.user_id for assignment in subject_assignees]
         timetable_entries = Timetable.query.filter(
             Timetable.users.any(User.id.in_(assignee_ids)),
-            Timetable.subject == selected_subject.name,
             Timetable.date >= week_start,
             Timetable.date <= week_end
         ).order_by(Timetable.date, Timetable.start_time).all()
@@ -340,12 +339,9 @@ def admin_timetable():
                 flash("Invalid subject or room selection.", "danger")
                 return redirect(url_for('admin_timetable'))
 
-            # Retrieve users assigned to the subject
+            # Retrieve users assigned to the selected subject
             assigned_users = AssignedSubject.query.filter_by(subject_id=subject_id).all()
             assigned_user_ids = {assignment.user_id for assignment in assigned_users}
-
-            # Get excluded users from the form
-            excluded_user_ids = set(map(int, request.form.getlist("excluded_users")))
 
             # Create a single timetable entry
             teacher = User.query.get(request.form["teacher_id"])
@@ -359,8 +355,8 @@ def admin_timetable():
             )
             db.session.add(new_entry)
 
-            # Assign timetable entry to all non-excluded users
-            for user_id in assigned_user_ids - excluded_user_ids:
+            # Assign timetable entry to all users assigned to the selected subject
+            for user_id in assigned_user_ids:
                 user = User.query.get(user_id)
                 new_entry.users.append(user)
 
@@ -386,9 +382,6 @@ def admin_timetable():
             year_group_users = User.query.filter_by(year_group=year_group).all()
             year_group_user_ids = {user.id for user in year_group_users}
 
-            # Get excluded users from the form
-            excluded_user_ids = set(map(int, request.form.getlist("excluded_users")))
-
             # Create a single timetable entry
             teacher = User.query.get(request.form["teacher_id"])
             new_entry = Timetable(
@@ -401,8 +394,8 @@ def admin_timetable():
             )
             db.session.add(new_entry)
 
-            # Assign timetable entry to all non-excluded users
-            for user_id in year_group_user_ids - excluded_user_ids:
+            # Assign timetable entry to all users in the year group
+            for user_id in year_group_user_ids:
                 user = User.query.get(user_id)
                 new_entry.users.append(user)
 
@@ -420,7 +413,6 @@ def admin_timetable():
         year_group_users=year_group_users,
         week_range=week_range, week_start=week_start, timedelta=timedelta
     )
-          
 
 @app.route('/admin_subjects', methods=['GET', 'POST'])
 def admin_subjects():
@@ -497,7 +489,7 @@ def get_students_by_year_group(year_group):
     students = User.query.filter_by(year_group=year_group, role='student').all()
     return jsonify([{"id": u.id, "username": u.username} for u in students])
 
-# Make sure this is at the BOTTOM
+# Ensure this is at the bottom
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
@@ -506,3 +498,4 @@ if __name__ == "__main__":
         print("Database initialized successfully!")
     
     app.run(debug=True)
+
