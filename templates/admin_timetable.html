@@ -125,6 +125,21 @@
                     document.getElementById("studentsMenu").style.display = "block";
                 });
         }
+
+        function showYearGroupStudents(yearGroup) {
+            fetch(`/get_students_by_year_group/${yearGroup}`)
+                .then(response => response.json())
+                .then(data => {
+                    let studentsList = document.getElementById("studentsList");
+                    studentsList.innerHTML = "";
+                    data.forEach(user => {
+                        let li = document.createElement("li");
+                        li.textContent = user.username;
+                        studentsList.appendChild(li);
+                    });
+                    document.getElementById("studentsMenu").style.display = "block";
+                });
+        }
     </script>
     <style>
         #excludePopup {
@@ -220,16 +235,14 @@
         <table border="1">
             <tr>
                 <th>Year Group</th>
-                <th>Staff Members</th>
                 <th>Students</th>
                 <th>Edit Timetables</th>
             </tr>
             {% for year_group in year_groups %}
                 <tr>
                     <td>{{ year_group }}</td>
-                    <td>{{ users|selectattr('year_group', 'equalto', year_group)|selectattr('role', 'equalto', 'staff')|map(attribute='username')|join(', ') }}</td>
                     <td>
-                        <button type="button" onclick="showStudents({{ year_group }})">View Students</button>
+                        <button type="button" onclick="showYearGroupStudents('{{ year_group }}')">View Students</button>
                     </td>
                     <td>
                         <button type="button" onclick="showYearGroupTimetable('{{ year_group }}')">Edit Timetables</button>
@@ -385,9 +398,9 @@
             <h3>Exclude Users</h3>
             <input type="text" id="searchExclude" onkeyup="filterUsers()" placeholder="Search users...">
             <ul>
-                {% for user in subject_assignees %}
-                    <li class="exclude-user" data-name="{{ user.user.username }}">
-                        <input type="checkbox" name="excluded_users" value="{{ user.user_id }}"> {{ user.user.username }} ({{ user.user.role }})
+                {% for user in year_group_users %}
+                    <li class="exclude-user" data-name="{{ user.username }}">
+                        <input type="checkbox" name="excluded_users" value="{{ user.id }}"> {{ user.username }} ({{ user.role }})
                     </li>
                 {% endfor %}
             </ul>
@@ -410,8 +423,8 @@
                         <ul>
                             {% set unique_entries = {} %}
                             {% for entry in timetable if entry.date.strftime('%A') == day %}
-                                {% if entry.id not in unique_entries %}
-                                    {% set unique_entries = unique_entries.update({entry.id: true}) %}
+                                {% if entry.entry_id not in unique_entries %}
+                                    {% set unique_entries = unique_entries.update({entry.entry_id: true}) %}
                                     <li>
                                         {{ entry.start_time.strftime('%H:%M') }} - {{ entry.end_time.strftime('%H:%M') }}<br>
                                         <strong>{{ entry.subject }}</strong><br>
@@ -436,5 +449,6 @@
     {% endif %}
 
     <p><a href="{{ url_for('admin') }}">Back to Admin Panel</a></p>
+    
 </body>
 </html>

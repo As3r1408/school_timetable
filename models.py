@@ -41,7 +41,6 @@ class Timetable(db.Model):
         self.end_time = end_time
         self.room = room  # Room is optional
 
-
         # Ensure `date` is always a `datetime.date` object
         if isinstance(date, str):  
             self.date = datetime.strptime(date, '%Y-%m-%d').date()  
@@ -60,6 +59,7 @@ class Timetable(db.Model):
 
         self.day_of_week = self.date.strftime('%A')  # Convert date to day name
         self.entry_id = f"{self.user_id}_{self.date}_{self.start_time}_{self.end_time}_{self.subject}_{self.teacher}_{self.room}"
+
 
 
 # Subject Model

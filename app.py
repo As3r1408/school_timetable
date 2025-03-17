@@ -217,6 +217,9 @@ def admin_timetable():
     timetable_entries = []
     assigned_subjects = []
     subject_assignees = []
+    year_group_users = []
+    
+    
 
     # Ensure the week_offset exists in session
     if "week_offset" not in session:
@@ -422,8 +425,11 @@ def admin_timetable():
         selected_subject=selected_subject, selected_year_group=selected_year_group,
         timetable=timetable_entries, assigned_subjects=assigned_subjects,
         subject_assignees=subject_assignees, year_groups=year_groups,
+        year_group_users=year_group_users,
         week_range=week_range, week_start=week_start, timedelta=timedelta
     )
+
+
 
 
 
@@ -501,8 +507,15 @@ def get_assigned_subjects(user_id):
 @app.route('/get_assigned_users/<int:subject_id>')
 def get_assigned_users(subject_id):
     assigned_users = AssignedSubject.query.filter_by(subject_id=subject_id).all()
-    users = [User.query.get(a.user_id) for a in assigned_users]
+    users = [User.query.get(a.user_id) for a in assigned_users if User.query.get(a.user_id).role == 'student']
     return jsonify([{"id": u.id, "username": u.username} for u in users])
+
+@app.route('/get_students_by_year_group/<year_group>')
+def get_students_by_year_group(year_group):
+    students = User.query.filter_by(year_group=year_group, role='student').all()
+    return jsonify([{"id": u.id, "username": u.username} for u in students])
+
+
 
 
 # Make sure this is at the BOTTOM
