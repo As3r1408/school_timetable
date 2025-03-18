@@ -406,6 +406,30 @@ def admin_timetable():
             flash(f"Timetable entry added for all users in year group '{year_group}'!", "success")
             return redirect(url_for('admin_timetable'))
 
+        elif action == "delete_entry_for_user":
+            entry_id = request.form["entry_id"]
+            user_id = request.form["user_id"]
+            entry = Timetable.query.get(entry_id)
+            user = User.query.get(user_id)
+            
+            if entry and user:
+                entry.users.remove(user)
+                db.session.commit()
+                flash(f"Entry removed for user {user.username}.", "info")
+            
+            return redirect(url_for('admin_timetable'))
+
+        elif action == "delete_entry_for_all":
+            entry_id = request.form["entry_id"]
+            entry = Timetable.query.get(entry_id)
+            
+            if entry:
+                db.session.delete(entry)
+                db.session.commit()
+                flash("Entry deleted for all users.", "info")
+            
+            return redirect(url_for('admin_timetable'))
+
     return render_template(
         "admin_timetable.html",
         users=users, staff_users=staff_users, rooms=rooms,
@@ -491,6 +515,109 @@ def get_assigned_users(subject_id):
 def get_students_by_year_group(year_group):
     students = User.query.filter_by(year_group=year_group, role='student').all()
     return jsonify([{"id": u.id, "username": u.username} for u in students])
+
+@app.route('/get_entry_details/<int:entry_id>')
+def get_entry_details(entry_id):
+    if 'user_id' not in session or session['role'] != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    entry = Timetable.query.get_or_404(entry_id)
+    subject = Subject.query.filter_by(name=entry.subject).first()
+    teacher = User.query.filter_by(username=entry.teacher).first()
+    room = Room.query.filter_by(name=entry.room).first()
+
+    return jsonify({
+        'date': entry.date.strftime('%Y-%m-%d'),
+        'start_time': entry.start_time.strftime('%H:%M'),
+        'end_time': entry.end_time.strftime('%H:%M'),
+        'subject_id': subject.id if subject else None,
+        'teacher_id': teacher.id if teacher else None,
+        'room_id': room.id if room else None
+    })
+
+@app.route('/get_entry_assignees/<int:entry_id>')
+def get_entry_assignees(entry_id):
+    if 'user_id' not in session or session['role'] != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    entry = Timetable.query.get_or_404(entry_id)
+    return jsonify([{'id': user.id, 'username': user.username} for user in entry.users])
+
+@app.route('/update_entry_assignees', methods=['POST'])
+def update_entry_assignees():
+    if 'user_id' not in session or session['role'] != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    data = request.get_json()
+    entry_id = data.get('entry_id')
+    user_ids = data.get('user_ids', [])
+
+    entry = Timetable.query.get_or_404(entry_id)
+    
+    # Clear existing assignees
+    entry.users = []
+    
+    # Add new assignees
+    for user_id in user_ids:
+        user = User.query.get(user_id)
+        if user:
+            entry.users.append(user)
+    
+    db.session.commit()
+    return jsonify({'success': True})
+
+@app.route('/edit_entry', methods=['POST'])
+def edit_entry():
+    if 'user_id' not in session or session['role'] != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    entry_id = request.form.get('entry_id')
+    entry = Timetable.query.get_or_404(entry_id)
+
+    # Store current assignees
+    current_assignees = entry.users.copy()
+
+    # Update entry details
+    entry.date = datetime.strptime(request.form['date'], '%Y-%m-%d').date()
+    entry.start_time = datetime.strptime(request.form['start_time'], '%H:%M').time()
+    entry.end_time = datetime.strptime(request.form['end_time'], '%H:%M').time()
+
+    subject = Subject.query.get(request.form['subject_id'])
+    teacher = User.query.get(request.form['teacher_id'])
+    room = Room.query.get(request.form['room_id'])
+
+    if subject and teacher and room:
+        entry.subject = subject.name
+        entry.teacher = teacher.username
+        entry.room = room.name
+        
+        # Update week and day_of_week
+        entry.week = entry.date.isocalendar()[1]
+        if entry.date.weekday() == 0:  # If it's Monday
+            previous_sunday = entry.date - timedelta(days=1)
+            entry.week = previous_sunday.isocalendar()[1] + 1
+        entry.day_of_week = entry.date.strftime('%A')
+        
+        db.session.commit()
+        flash("Timetable entry updated successfully!", "success")
+    else:
+        flash("Invalid data. Please ensure all fields are selected.", "danger")
+
+    return redirect(url_for('admin_timetable'))
+
+@app.route('/get_subject_users/<int:subject_id>')
+def get_subject_users(subject_id):
+    if 'user_id' not in session or session['role'] != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    assigned_users = AssignedSubject.query.filter_by(subject_id=subject_id).all()
+    users = [User.query.get(a.user_id) for a in assigned_users]
+    return jsonify([{
+        'id': user.id, 
+        'username': user.username,
+        'role': user.role,
+        'year_group': user.year_group
+    } for user in users if user])
 
 # Ensure this is at the bottom
 if __name__ == "__main__":

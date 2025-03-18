@@ -125,6 +125,122 @@
                     document.getElementById("studentsMenu").style.display = "block";
                 });
         }
+
+        function showEditForm(entryId) {
+            fetch(`/get_entry_details/${entryId}`)
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('edit_entry_id').value = entryId;
+                    document.getElementById('edit_date').value = data.date;
+                    document.getElementById('edit_start_time').value = data.start_time;
+                    document.getElementById('edit_end_time').value = data.end_time;
+                    document.getElementById('edit_subject_id').value = data.subject_id;
+                    document.getElementById('edit_teacher_id').value = data.teacher_id;
+                    document.getElementById('edit_room_id').value = data.room_id;
+                    document.getElementById('editEntryModal').style.display = 'block';
+                });
+        }
+
+        function showDeleteConfirmation(entryId) {
+            event.preventDefault();
+            fetch(`/get_entry_assignees/${entryId}`)
+                .then(response => response.json())
+                .then(data => {
+                    const usersList = document.getElementById('assignedUsersList');
+                    usersList.innerHTML = '';
+                    data.forEach(user => {
+                        const li = document.createElement('li');
+                        li.textContent = user.username;
+                        usersList.appendChild(li);
+                    });
+                    document.getElementById('delete_entry_id').value = entryId;
+                    document.getElementById('deleteConfirmationModal').style.display = 'block';
+                });
+        }
+
+        function manageAssignees() {
+            const entryId = document.getElementById('edit_entry_id').value;
+            const subjectId = document.getElementById('edit_subject_id').value;
+
+            // Fetch both current assignees and available users
+            Promise.all([
+                fetch(`/get_entry_assignees/${entryId}`).then(res => res.json()),
+                fetch(`/get_subject_users/${subjectId}`).then(res => res.json())
+            ]).then(([currentAssignees, subjectUsers]) => {
+                const assigneesList = document.getElementById('assigneesList');
+                const availableUsersList = document.getElementById('availableUsersList');
+                
+                assigneesList.innerHTML = '';
+                availableUsersList.innerHTML = '';
+
+                // Create a map of current assignees for easy lookup
+                const assigneeMap = new Map(currentAssignees.map(user => [user.id, user]));
+
+                // Add all subject users to the list
+                subjectUsers.forEach(user => {
+                    const isAssigned = assigneeMap.has(user.id);
+                    const container = isAssigned ? assigneesList : availableUsersList;
+                    
+                    const div = document.createElement('div');
+                    div.className = 'checkbox-item';
+                    div.innerHTML = `
+                        <input type="checkbox" id="user_${user.id}" 
+                            value="${user.id}" 
+                            ${isAssigned ? 'checked' : ''}>
+                        <label for="user_${user.id}">${user.username}</label>
+                    `;
+                    container.appendChild(div);
+                });
+
+                document.getElementById('manageAssigneesModal').style.display = 'block';
+            });
+        }
+
+        function filterUsers() {
+            const searchTerm = document.getElementById('assigneeSearch').value.toLowerCase();
+            const checkboxItems = document.querySelectorAll('.checkbox-item');
+            
+            checkboxItems.forEach(item => {
+                const label = item.querySelector('label').textContent.toLowerCase();
+                item.style.display = label.includes(searchTerm) ? '' : 'none';
+            });
+        }
+
+        function updateAssignees() {
+            const entryId = document.getElementById('edit_entry_id').value;
+            const checkedUsers = document.querySelectorAll('.checkbox-item input[type="checkbox"]:checked');
+            const userIds = Array.from(checkedUsers).map(cb => cb.value);
+            
+            fetch('/update_entry_assignees', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    entry_id: entryId,
+                    user_ids: userIds
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    closeAssigneesModal();
+                    location.reload();
+                }
+            });
+        }
+
+        function closeEditModal() {
+            document.getElementById('editEntryModal').style.display = 'none';
+        }
+
+        function closeDeleteModal() {
+            document.getElementById('deleteConfirmationModal').style.display = 'none';
+        }
+
+        function closeAssigneesModal() {
+            document.getElementById('manageAssigneesModal').style.display = 'none';
+        }
     </script>
 </head>
 <body>
@@ -375,10 +491,29 @@
                                         <strong>{{ entry.subject }}</strong><br>
                                         {{ entry.teacher }}<br>
                                         Room: {{ entry.room if entry.room else "Not assigned" }}<br>
+                                        
+                                        <!-- Add Edit button -->
+                                        <button type="button" onclick="showEditForm('{{ entry.id }}')">Edit</button>
+
+                                        {% if selected_user %}
+                                            <!-- Only show Delete for User in Edit by User mode -->
+                                            <form method="post" style="display:inline;">
+                                                <input type="hidden" name="action" value="delete_entry_for_user">
+                                                <input type="hidden" name="entry_id" value="{{ entry.id }}">
+                                                <input type="hidden" name="user_id" value="{{ selected_user.id }}">
+                                                <button type="submit" onclick="return confirm('Remove this entry for {{ selected_user.username }}?')">
+                                                    Delete for User
+                                                </button>
+                                            </form>
+                                        {% endif %}
+
+                                        <!-- Rename existing delete button to Delete for All -->
                                         <form method="post" style="display:inline;">
-                                            <input type="hidden" name="action" value="delete_entry">
+                                            <input type="hidden" name="action" value="delete_entry_for_all">
                                             <input type="hidden" name="entry_id" value="{{ entry.id }}">
-                                            <button type="submit" onclick="return confirm('Are you sure?')">Delete</button>
+                                            <button type="submit" onclick="showDeleteConfirmation('{{ entry.id }}')">
+                                                Delete for All
+                                            </button>
                                         </form>
                                         <hr>
                                     </li>
@@ -394,6 +529,154 @@
     {% endif %}
 
     <p><a href="{{ url_for('admin') }}">Back to Admin Panel</a></p>
+
+    <!-- Edit Entry Modal -->
+    <div id="editEntryModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h3>Edit Timetable Entry</h3>
+            <form id="editEntryForm" method="post">
+                <input type="hidden" name="action" value="edit_entry">
+                <input type="hidden" name="entry_id" id="edit_entry_id">
+
+                Date: <input type="date" name="date" id="edit_date" required><br>
+                Start Time: <input type="time" name="start_time" id="edit_start_time" required><br>
+                End Time: <input type="time" name="end_time" id="edit_end_time" required><br>
+
+                Subject:
+                <select name="subject_id" id="edit_subject_id" required>
+                    {% for subject in subjects %}
+                        <option value="{{ subject.id }}">{{ subject.name }}</option>
+                    {% endfor %}
+                </select><br>
+
+                Teacher:
+                <select name="teacher_id" id="edit_teacher_id" required>
+                    {% for staff in staff_users %}
+                        <option value="{{ staff.id }}">{{ staff.username }}</option>
+                    {% endfor %}
+                </select><br>
+
+                Room:
+                <select name="room_id" id="edit_room_id" required>
+                    {% for room in rooms %}
+                        <option value="{{ room.id }}">{{ room.name }}</option>
+                    {% endfor %}
+                </select><br>
+
+                <button type="button" onclick="manageAssignees()">Manage Assignees</button>
+                <button type="submit">Save Changes</button>
+                <button type="button" onclick="closeEditModal()">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteConfirmationModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h3>Confirm Delete</h3>
+            <p>This entry is assigned to the following users:</p>
+            <ul id="assignedUsersList"></ul>
+            <p>Are you sure you want to delete this entry for all users?</p>
+            <form id="deleteConfirmForm" method="post">
+                <input type="hidden" name="action" value="delete_entry_for_all">
+                <input type="hidden" name="entry_id" id="delete_entry_id">
+                <button type="submit">Delete for All</button>
+                <button type="button" onclick="closeDeleteModal()">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Manage Assignees Modal -->
+    <div id="manageAssigneesModal" class="modal">
+        <div class="modal-content">
+            <h3>Manage Assignees</h3>
+            <div class="search-container">
+                <input type="text" id="assigneeSearch" placeholder="Search users..." onkeyup="filterUsers()">
+            </div>
+            <div class="assignees-container">
+                <div id="currentAssignees">
+                    <h4>Currently Assigned Users</h4>
+                    <div id="assigneesList" class="checkbox-list"></div>
+                </div>
+                <div id="availableUsers">
+                    <h4>Available Users</h4>
+                    <div id="availableUsersList" class="checkbox-list"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" onclick="updateAssignees()">Save Changes</button>
+                <button type="button" onclick="closeAssigneesModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add CSS styles -->
+    <style>
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.5);
+    }
+
+    .modal-content {
+        background-color: #fefefe;
+        margin: 15% auto;
+        padding: 20px;
+        border: 1px solid #888;
+        width: 60%;
+        max-width: 600px;
+        border-radius: 5px;
+        position: relative;
+    }
+
+    .search-container {
+        margin-bottom: 15px;
+    }
+
+    .search-container input {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+
+    .assignees-container {
+        display: flex;
+        gap: 20px;
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    .checkbox-list {
+        border: 1px solid #ddd;
+        padding: 10px;
+        border-radius: 4px;
+    }
+
+    .checkbox-item {
+        display: flex;
+        align-items: center;
+        padding: 5px 0;
+    }
+
+    .checkbox-item input[type="checkbox"] {
+        margin-right: 8px;
+    }
+
+    .modal-footer {
+        margin-top: 15px;
+        text-align: right;
+    }
+
+    .modal-footer button {
+        margin-left: 10px;
+    }
+    </style>
     
 </body>
 </html>
