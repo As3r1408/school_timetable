@@ -247,32 +247,28 @@ def admin_timetable():
 
     # Calculate the start and end of the selected week
     today = datetime.today()
-    week_start = today - timedelta(days=today.weekday()) + timedelta(weeks=session["week_offset"])
-    week_end = week_start + timedelta(days=6)
+    # Adjust the week start calculation to include Mondays
+    week_start = (today - timedelta(days=today.weekday())).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(weeks=session["week_offset"])
+    week_end = (week_start + timedelta(days=6)).replace(hour=23, minute=59, second=59, microsecond=999999)
     week_range = f"{week_start.strftime('%a %d/%m')} - {week_end.strftime('%a %d/%m')}"
 
-    # Fetch timetable for the selected user, subject, or year group and current week
+    # Modify the timetable queries to use inclusive datetime comparison
     if selected_user:
         timetable_entries = Timetable.query.filter(
             Timetable.users.any(id=selected_user.id),
-            Timetable.date >= week_start,
-            Timetable.date <= week_end
+            Timetable.date.between(week_start.date(), week_end.date())
         ).order_by(Timetable.date, Timetable.start_time).all()
     elif selected_subject:
-        # Fetch common timetable entries for all assignees of the selected subject
         assignee_ids = [assignment.user_id for assignment in subject_assignees]
         timetable_entries = Timetable.query.filter(
             Timetable.users.any(User.id.in_(assignee_ids)),
-            Timetable.date >= week_start,
-            Timetable.date <= week_end
+            Timetable.date.between(week_start.date(), week_end.date())
         ).order_by(Timetable.date, Timetable.start_time).all()
     elif selected_year_group:
-        # Fetch timetable entries for all users in the selected year group
         year_group_user_ids = [user.id for user in year_group_users]
         timetable_entries = Timetable.query.filter(
             Timetable.users.any(User.id.in_(year_group_user_ids)),
-            Timetable.date >= week_start,
-            Timetable.date <= week_end
+            Timetable.date.between(week_start.date(), week_end.date())
         ).order_by(Timetable.date, Timetable.start_time).all()
 
     # Handle adding a timetable entry
