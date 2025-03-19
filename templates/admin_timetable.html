@@ -153,8 +153,11 @@
                 });
         }
 
-        function showDeleteConfirmation(entryId) {
-            event.preventDefault();
+        function showDeleteConfirmation(entryId, event) {
+            if (event) {
+                event.preventDefault();
+            }
+            
             fetch(`/get_entry_assignees/${entryId}`)
                 .then(response => response.json())
                 .then(data => {
@@ -167,6 +170,10 @@
                     });
                     document.getElementById('delete_entry_id').value = entryId;
                     document.getElementById('deleteConfirmationModal').style.display = 'block';
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error loading user details');
                 });
         }
 
@@ -258,6 +265,12 @@
         document.getElementById('editEntryForm').addEventListener('submit', function(e) {
             // Form will submit normally - no need to prevent default
             closeEditModal();
+        });
+
+        // Add event listener for the delete form
+        document.getElementById('deleteConfirmForm').addEventListener('submit', function(e) {
+            // Form will submit normally - no need to prevent default
+            closeDeleteModal();
         });
     </script>
 </head>
@@ -529,7 +542,8 @@
                                         <form method="post" style="display:inline;">
                                             <input type="hidden" name="action" value="delete_entry_for_all">
                                             <input type="hidden" name="entry_id" value="{{ entry.id }}">
-                                            <button type="submit" onclick="showDeleteConfirmation('{{ entry.id }}')">
+                                            <!-- Update the Delete for All button -->
+                                            <button type="button" onclick="showDeleteConfirmation('{{ entry.id }}', event)">
                                                 Delete for All
                                             </button>
                                         </form>
@@ -608,7 +622,7 @@
     </div>
 
     <!-- Delete Confirmation Modal -->
-    <div id="deleteConfirmationModal" class="modal" style="display: none;">
+    <div id="deleteConfirmationModal" class="modal">
         <div class="modal-content">
             <h3>Confirm Delete</h3>
             <p>This entry is assigned to the following users:</p>
@@ -617,8 +631,10 @@
             <form id="deleteConfirmForm" method="post">
                 <input type="hidden" name="action" value="delete_entry_for_all">
                 <input type="hidden" name="entry_id" id="delete_entry_id">
-                <button type="submit">Delete for All</button>
-                <button type="button" onclick="closeDeleteModal()">Cancel</button>
+                <div class="modal-footer">
+                    <button type="submit" class="danger">Delete for All</button>
+                    <button type="button" onclick="closeDeleteModal()">Cancel</button>
+                </div>
             </form>
         </div>
     </div>
@@ -712,6 +728,33 @@
 
     .modal-footer button {
         margin-left: 10px;
+    }
+
+    .modal-footer button.danger {
+        background-color: #dc3545;
+        color: white;
+    }
+
+    .modal-footer button.danger:hover {
+        background-color: #c82333;
+    }
+
+    #assignedUsersList {
+        max-height: 200px;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+        padding: 10px;
+        margin: 10px 0;
+        border-radius: 4px;
+    }
+
+    #assignedUsersList li {
+        padding: 4px 0;
+        border-bottom: 1px solid #eee;
+    }
+
+    #assignedUsersList li:last-child {
+        border-bottom: none;
     }
     </style>
     
