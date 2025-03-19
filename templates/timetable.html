@@ -4,7 +4,23 @@
     <title>Your Timetable</title>
 </head>
 <body>
-    <h2>Your Timetable</h2>
+    <h2>Timetable View</h2>
+
+    {% if permission_level == 'staff' %}
+        <div class="student-selector">
+            <h3>View Student Timetable</h3>
+            <form method="get">
+                <select name="student_id" onchange="this.form.submit()">
+                    <option value="">Select a student...</option>
+                    {% for student in students %}
+                        <option value="{{ student.id }}" {% if current_user.id == student.id %}selected{% endif %}>
+                            {{ student.username }} ({{ student.year_group }})
+                        </option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+    {% endif %}
 
     <!-- Week Navigation -->
     <h3>Week: {{ week_range }}</h3>
@@ -13,8 +29,8 @@
         <button type="submit" name="week_change" value="1">Next Week</button>
     </form>
 
-    <!-- Step 3: Display Current Week's Timetable -->
-    <h3>Timetable for {{ week_range }}</h3>
+    <!-- Display Current Week's Timetable -->
+    <h3>Timetable for {{ current_user.username }}</h3>
     {% if timetable %}
         <table border="1">
             <tr>
@@ -30,7 +46,7 @@
                                 <li>
                                     {{ entry.start_time.strftime('%H:%M') }} - {{ entry.end_time.strftime('%H:%M') }}<br>
                                     <strong>{{ entry.subject }}</strong><br>
-                                    {{ entry.teacher }}<br>
+                                    {{ entry.teacher }}{% if entry.is_substitute %} (Substitute){% endif %}<br>
                                     Room: {{ entry.room if entry.room else "Not assigned" }}<br>
                                     <hr>
                                 </li>

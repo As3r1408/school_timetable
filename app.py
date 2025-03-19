@@ -77,20 +77,44 @@ def dashboard():
 def display_timetable(user, week=None, permission_level=None):
     if not week:
         today = datetime.today()
-        week_start = today - timedelta(days=today.weekday())
+        # Fix: Adjust the week start calculation to include Mondays
+        week_start = (today - timedelta(days=today.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
     else:
         week_start = week
 
-    week_end = week_start + timedelta(days=6)
+    # Fix: Adjust week end to be inclusive
+    week_end = (week_start + timedelta(days=6)).replace(hour=23, minute=59, second=59, microsecond=999999)
     week_range = f"{week_start.strftime('%a %d/%m')} - {week_end.strftime('%a %d/%m')}"
 
+    # If user is staff, allow them to view other students' timetables
+    if permission_level == 'staff':
+        student_id = request.args.get('student_id')
+        if student_id:
+            selected_user = User.query.get(student_id)
+            if selected_user and selected_user.role == 'student':
+                user = selected_user
+
+    # Fix: Use between for inclusive date range
     timetable_entries = Timetable.query.filter(
         Timetable.users.any(id=user.id),
-        Timetable.date >= week_start,
-        Timetable.date <= week_end
+        Timetable.date.between(week_start.date(), week_end.date())
     ).order_by(Timetable.date, Timetable.start_time).all()
 
-    return render_template('timetable.html', timetable=timetable_entries, week_range=week_range, permission_level=permission_level)
+    # Get list of students for staff members
+    students = []
+    if permission_level == 'staff':
+        students = User.query.filter_by(role='student').all()
+
+    return render_template(
+        'timetable.html', 
+        timetable=timetable_entries, 
+        week_range=week_range, 
+        permission_level=permission_level,
+        week_start=week_start,
+        timedelta=timedelta,
+        students=students,
+        current_user=user
+    )
 
 @app.route('/timetable', methods=['GET', 'POST'])
 def timetable():
@@ -110,7 +134,8 @@ def timetable():
         session["week_offset"] += int(request.form["week_change"])
 
     today = datetime.today()
-    week_start = today - timedelta(days=today.weekday()) + timedelta(weeks=session["week_offset"])
+    # Fix: Adjust week start calculation
+    week_start = (today - timedelta(days=today.weekday())).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(weeks=session["week_offset"])
 
     return display_timetable(user, week_start, session['role'])
 
@@ -292,15 +317,19 @@ def admin_timetable():
                 room = Room.query.get(room_id)
 
                 if subject and teacher and room:
+                    is_substitute = 'is_substitute' in request.form
                     new_entry = Timetable(
                         date=date,
                         subject=subject.name,
                         teacher=teacher.username,
                         start_time=start_time,
                         end_time=end_time,
-                        room=room.name
+                        room=room.name,
+                        is_substitute=is_substitute
                     )
                     new_entry.users.append(selected_user)
+                    # Also add the teacher to the users list
+                    new_entry.users.append(teacher)
                     db.session.add(new_entry)
                     db.session.commit()
                     flash("Timetable entry added!", "success")
@@ -344,13 +373,15 @@ def admin_timetable():
 
             # Create a single timetable entry with the NEW selected subject
             teacher = User.query.get(request.form["teacher_id"])
+            is_substitute = 'is_substitute' in request.form
             new_entry = Timetable(
                 date=date,
                 subject=subject.name,
                 teacher=teacher.username,
                 start_time=start_time,
                 end_time=end_time,
-                room=room.name
+                room=room.name,
+                is_substitute=is_substitute
             )
             db.session.add(new_entry)
 
@@ -387,13 +418,15 @@ def admin_timetable():
 
             # Create a single timetable entry
             teacher = User.query.get(request.form["teacher_id"])
+            is_substitute = 'is_substitute' in request.form
             new_entry = Timetable(
                 date=date,
                 subject=subject.name,
                 teacher=teacher.username,
                 start_time=start_time,
                 end_time=end_time,
-                room=room.name
+                room=room.name,
+                is_substitute=is_substitute
             )
             db.session.add(new_entry)
 
@@ -593,6 +626,14 @@ def edit_entry():
         entry.teacher = teacher.username
         entry.room = room.name
         
+        entry.is_substitute = 'is_substitute' in request.form
+        
+        # Update the teacher in the users list
+        old_teacher = User.query.filter_by(username=entry.teacher).first()
+        if old_teacher in entry.users:
+            entry.users.remove(old_teacher)
+        entry.users.append(teacher)
+        
         # Update week and day_of_week
         entry.week = entry.date.isocalendar()[1]
         if entry.date.weekday() == 0:  # If it's Monday
@@ -601,8 +642,6 @@ def edit_entry():
         entry.day_of_week = entry.date.strftime('%A')
         
         db.session.commit()
-        flash("Timetable entry updated successfully!", "success")
-
     except Exception as e:
         db.session.rollback()
         flash(f"Error updating entry: {str(e)}", "danger")
@@ -622,6 +661,29 @@ def get_subject_users(subject_id):
         'role': user.role,
         'year_group': user.year_group
     } for user in users if user])
+
+@app.route('/get_subject_teachers/<int:subject_id>')
+def get_subject_teachers(subject_id):
+    if 'user_id' not in session or session['role'] != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    is_substitute = request.args.get('is_substitute') == 'true'
+    
+    if is_substitute:
+        # Get all staff members
+        teachers = User.query.filter_by(role='staff').all()
+    else:
+        # Get only teachers assigned to this subject
+        assigned_teachers = AssignedSubject.query.join(User).filter(
+            AssignedSubject.subject_id == subject_id,
+            User.role == 'staff'
+        ).all()
+        teachers = [User.query.get(a.user_id) for a in assigned_teachers]
+
+    return jsonify([{
+        'id': teacher.id,
+        'username': teacher.username
+    } for teacher in teachers if teacher])
 
 # Ensure this is at the bottom
 if __name__ == "__main__":

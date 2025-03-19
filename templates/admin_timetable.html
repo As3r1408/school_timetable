@@ -272,6 +272,113 @@
             // Form will submit normally - no need to prevent default
             closeDeleteModal();
         });
+
+        function updateTeacherList() {
+            const subjectSelect = document.getElementById('subject_select');
+            const isSubstitute = document.getElementById('is_substitute').checked;
+            const teacherSelect = document.getElementById('teacher_select');
+
+            // Clear current options
+            teacherSelect.innerHTML = '<option value="">Select a teacher</option>';
+
+            // Get teachers based on subject and substitute status
+            fetch(`/get_subject_teachers/${subjectSelect.value}?is_substitute=${isSubstitute}`)
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(teacher => {
+                        const option = document.createElement('option');
+                        option.value = teacher.id;
+                        option.text = teacher.username;
+                        teacherSelect.add(option);
+                    });
+                });
+        }
+
+        // Similar update for the edit form
+        function updateEditTeacherList() {
+            const subjectSelect = document.getElementById('edit_subject_id');
+            const isSubstitute = document.getElementById('edit_is_substitute').checked;
+            const teacherSelect = document.getElementById('edit_teacher_id');
+
+            teacherSelect.innerHTML = '<option value="">Select a teacher</option>';
+
+            fetch(`/get_subject_teachers/${subjectSelect.value}?is_substitute=${isSubstitute}`)
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(teacher => {
+                        const option = document.createElement('option');
+                        option.value = teacher.id;
+                        option.text = teacher.username;
+                        teacherSelect.add(option);
+                    });
+                });
+        }
+
+        function updateTeacherListForSubject() {
+            const subjectSelect = document.querySelector('select[name="subject_id"]');
+            const isSubstitute = document.getElementById('subject_is_substitute').checked;
+            const teacherSelect = document.getElementById('subject_teacher_select');
+
+            // Clear current options
+            teacherSelect.innerHTML = '<option value="">Select a teacher</option>';
+
+            fetch(`/get_subject_teachers/${subjectSelect.value}?is_substitute=${isSubstitute}`)
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(teacher => {
+                        const option = document.createElement('option');
+                        option.value = teacher.id;
+                        option.text = teacher.username;
+                        teacherSelect.add(option);
+                    });
+                });
+        }
+
+        function updateTeacherListForYearGroup() {
+            const subjectSelect = document.querySelector('select[name="subject_id"]');
+            const isSubstitute = document.getElementById('year_group_is_substitute').checked;
+            const teacherSelect = document.getElementById('year_group_teacher_select');
+
+            // Clear current options
+            teacherSelect.innerHTML = '<option value="">Select a teacher</option>';
+
+            fetch(`/get_subject_teachers/${subjectSelect.value}?is_substitute=${isSubstitute}`)
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(teacher => {
+                        const option = document.createElement('option');
+                        option.value = teacher.id;
+                        option.text = teacher.username;
+                        teacherSelect.add(option);
+                    });
+                });
+        }
+
+        // Add event listeners when the document loads
+        document.addEventListener('DOMContentLoaded', function() {
+            const subjectTeacherSelect = document.getElementById('subject_teacher_select');
+            const yearGroupTeacherSelect = document.getElementById('year_group_teacher_select');
+            
+            if (subjectTeacherSelect) {
+                updateTeacherListForSubject();
+            }
+            if (yearGroupTeacherSelect) {
+                updateTeacherListForYearGroup();
+            }
+            
+            // Add change event listeners for subject dropdowns
+            const subjectSelects = document.querySelectorAll('select[name="subject_id"]');
+            subjectSelects.forEach(select => {
+                select.addEventListener('change', function() {
+                    const form = this.closest('form');
+                    if (form.querySelector('#subject_teacher_select')) {
+                        updateTeacherListForSubject();
+                    } else if (form.querySelector('#year_group_teacher_select')) {
+                        updateTeacherListForYearGroup();
+                    }
+                });
+            });
+        });
     </script>
 </head>
 <body>
@@ -288,7 +395,7 @@
         <input type="text" id="searchUser" placeholder="Search users...">
         <table border="1">
             <tr>
-                <th>Student Name</th>
+                <th>User Name</th>
                 <th>Year Group</th>
                 <th>Subjects</th>
                 <th>Edit Timetable</th>
@@ -296,7 +403,7 @@
             {% for user in users %}
                 <tr>
                     <td>{{ user.username }}</td>
-                    <td>{% if user.role == 'student' %}{{ user.year_group }}{% else %}None{% endif %}</td>
+                    <td>{% if user.role == 'student' %}{{ user.year_group }}{% else %}Staff{% endif %}</td>
                     <td>
                         <button type="button" onclick="showSubjects({{ user.id }})">View Subjects</button>
                     </td>
@@ -405,18 +512,20 @@
                 End Time: <input type="time" name="end_time" required><br>
 
                 Select Subject:
-                <select name="subject_id" required>
+                <select name="subject_id" id="subject_select" required onchange="updateTeacherList()">
                     {% for assignment in assigned_subjects %}
                         <option value="{{ assignment.subject.id }}">{{ assignment.subject.name }}</option>
                     {% endfor %}
                 </select><br>
 
-                Teacher: 
-                <select name="teacher_id" required>
-                    {% for staff in staff_users %}
-                        <option value="{{ staff.id }}">{{ staff.username }}</option>
-                    {% endfor %}
-                </select><br>
+                <div class="teacher-selection">
+                    Select Teacher:
+                    <select name="teacher_id" id="teacher_select" required>
+                        <option value="">Select a teacher</option>
+                    </select>
+                    <input type="checkbox" id="is_substitute" name="is_substitute" onchange="updateTeacherList()">
+                    <label for="is_substitute">Is substitute?</label>
+                </div><br>
 
                 Select Room:
                 <select name="room_id" required>
@@ -427,6 +536,32 @@
 
                 <button type="submit">Add Entry</button>
             </form>
+
+            <script>
+            function updateTeacherList() {
+                const subjectSelect = document.getElementById('subject_select');
+                const isSubstitute = document.getElementById('is_substitute').checked;
+                const teacherSelect = document.getElementById('teacher_select');
+
+                // Clear current options
+                teacherSelect.innerHTML = '<option value="">Select a teacher</option>';
+
+                // Get teachers based on subject and substitute status
+                fetch(`/get_subject_teachers/${subjectSelect.value}?is_substitute=${isSubstitute}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        data.forEach(teacher => {
+                            const option = document.createElement('option');
+                            option.value = teacher.id;
+                            option.text = teacher.username;
+                            teacherSelect.add(option);
+                        });
+                    });
+            }
+
+            // Initialize teacher list when page loads
+            document.addEventListener('DOMContentLoaded', updateTeacherList);
+            </script>
         {% endif %}
 
         <!-- Mass Timetable Entry for Subject Assignees -->
@@ -446,12 +581,14 @@
                     {% endfor %}
                 </select><br>
 
-                Select Teacher:
-                <select name="teacher_id" required>
-                    {% for staff in staff_users %}
-                        <option value="{{ staff.id }}">{{ staff.username }}</option>
-                    {% endfor %}
-                </select><br>
+                <div class="teacher-selection">
+                    Select Teacher:
+                    <select name="teacher_id" id="subject_teacher_select" required>
+                        <option value="">Select a teacher</option>
+                    </select>
+                    <input type="checkbox" id="subject_is_substitute" name="is_substitute" onchange="updateTeacherListForSubject()">
+                    <label for="subject_is_substitute">Is substitute?</label>
+                </div><br>
 
                 Select Room:
                 <select name="room_id" required>
@@ -481,12 +618,14 @@
                     {% endfor %}
                 </select><br>
 
-                Select Teacher:
-                <select name="teacher_id" required>
-                    {% for staff in staff_users %}
-                        <option value="{{ staff.id }}">{{ staff.username }}</option>
-                    {% endfor %}
-                </select><br>
+                <div class="teacher-selection">
+                    Select Teacher:
+                    <select name="teacher_id" id="year_group_teacher_select" required>
+                        <option value="">Select a teacher</option>
+                    </select>
+                    <input type="checkbox" id="year_group_is_substitute" name="is_substitute" onchange="updateTeacherListForYearGroup()">
+                    <label for="year_group_is_substitute">Is substitute?</label>
+                </div><br>
 
                 Select Room:
                 <select name="room_id" required>
@@ -513,43 +652,38 @@
                 {% for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] %}
                     <td>
                         <ul>
-                            {% set unique_entries = {} %}
                             {% for entry in timetable if entry.date.strftime('%A') == day %}
-                                {% if entry.entry_id not in unique_entries %}
-                                    {% set unique_entries = unique_entries.update({entry.entry_id: true}) %}
-                                    <li>
-                                        {{ entry.start_time.strftime('%H:%M') }} - {{ entry.end_time.strftime('%H:%M') }}<br>
-                                        <strong>{{ entry.subject }}</strong><br>
-                                        {{ entry.teacher }}<br>
-                                        Room: {{ entry.room if entry.room else "Not assigned" }}<br>
-                                        
-                                        <!-- Add Edit button -->
-                                        <button type="button" onclick="showEditForm('{{ entry.id }}')">Edit</button>
+                                <li>
+                                    {{ entry.start_time.strftime('%H:%M') }} - {{ entry.end_time.strftime('%H:%M') }}<br>
+                                    <strong>{{ entry.subject }}</strong><br>
+                                    {{ entry.teacher }}{% if entry.is_substitute %} (Substitute){% endif %}<br>
+                                    Room: {{ entry.room if entry.room else "Not assigned" }}<br>
+                                    
+                                    <!-- Add Edit button -->
+                                    <button type="button" onclick="showEditForm('{{ entry.id }}')">Edit</button>
 
-                                        {% if selected_user %}
-                                            <!-- Only show Delete for User in Edit by User mode -->
-                                            <form method="post" style="display:inline;">
-                                                <input type="hidden" name="action" value="delete_entry_for_user">
-                                                <input type="hidden" name="entry_id" value="{{ entry.id }}">
-                                                <input type="hidden" name="user_id" value="{{ selected_user.id }}">
-                                                <button type="submit" onclick="return confirm('Remove this entry for {{ selected_user.username }}?')">
-                                                    Delete for User
-                                                </button>
-                                            </form>
-                                        {% endif %}
-
-                                        <!-- Rename existing delete button to Delete for All -->
+                                    {% if selected_user %}
+                                        <!-- Only show Delete for User in Edit by User mode -->
                                         <form method="post" style="display:inline;">
-                                            <input type="hidden" name="action" value="delete_entry_for_all">
+                                            <input type="hidden" name="action" value="delete_entry_for_user">
                                             <input type="hidden" name="entry_id" value="{{ entry.id }}">
-                                            <!-- Update the Delete for All button -->
-                                            <button type="button" onclick="showDeleteConfirmation('{{ entry.id }}', event)">
-                                                Delete for All
+                                            <input type="hidden" name="user_id" value="{{ selected_user.id }}">
+                                            <button type="submit" onclick="return confirm('Remove this entry for {{ selected_user.username }}?')">
+                                                Delete for User
                                             </button>
                                         </form>
-                                        <hr>
-                                    </li>
-                                {% endif %}
+                                    {% endif %}
+
+                                    <!-- Delete for All button -->
+                                    <form method="post" style="display:inline;">
+                                        <input type="hidden" name="action" value="delete_entry_for_all">
+                                        <input type="hidden" name="entry_id" value="{{ entry.id }}">
+                                        <button type="button" onclick="showDeleteConfirmation('{{ entry.id }}', event)">
+                                            Delete for All
+                                        </button>
+                                    </form>
+                                    <hr>
+                                </li>
                             {% endfor %}
                         </ul>
                     </td>
@@ -587,7 +721,7 @@
 
                 <div class="form-group">
                     <label for="edit_subject_id">Subject:</label>
-                    <select name="subject_id" id="edit_subject_id" required>
+                    <select name="subject_id" id="edit_subject_id" required onchange="updateEditTeacherList()">
                         {% for subject in subjects %}
                             <option value="{{ subject.id }}">{{ subject.name }}</option>
                         {% endfor %}
@@ -595,6 +729,9 @@
                 </div>
 
                 <div class="form-group">
+                    <input type="checkbox" id="edit_is_substitute" name="is_substitute" onchange="updateEditTeacherList()">
+                    <label for="edit_is_substitute">Is substitute?</label><br>
+
                     <label for="edit_teacher_id">Teacher:</label>
                     <select name="teacher_id" id="edit_teacher_id" required>
                         {% for staff in staff_users %}
@@ -602,6 +739,27 @@
                         {% endfor %}
                     </select>
                 </div>
+
+                <script>
+                function updateEditTeacherList() {
+                    const subjectSelect = document.getElementById('edit_subject_id');
+                    const isSubstitute = document.getElementById('edit_is_substitute').checked;
+                    const teacherSelect = document.getElementById('edit_teacher_id');
+
+                    teacherSelect.innerHTML = '<option value="">Select a teacher</option>';
+
+                    fetch(`/get_subject_teachers/${subjectSelect.value}?is_substitute=${isSubstitute}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            data.forEach(teacher => {
+                                const option = document.createElement('option');
+                                option.value = teacher.id;
+                                option.text = teacher.username;
+                                teacherSelect.add(option);
+                            });
+                        });
+                }
+                </script>
 
                 <div class="form-group">
                     <label for="edit_room_id">Room:</label>
