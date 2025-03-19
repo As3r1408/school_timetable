@@ -571,22 +571,24 @@ def edit_entry():
     if 'user_id' not in session or session['role'] != 'admin':
         return jsonify({'error': 'Unauthorized'}), 403
 
-    entry_id = request.form.get('entry_id')
-    entry = Timetable.query.get_or_404(entry_id)
+    try:
+        entry_id = request.form.get('entry_id')
+        entry = Timetable.query.get_or_404(entry_id)
 
-    # Store current assignees
-    current_assignees = entry.users.copy()
+        # Update entry details
+        entry.date = datetime.strptime(request.form['date'], '%Y-%m-%d').date()
+        entry.start_time = datetime.strptime(request.form['start_time'], '%H:%M').time()
+        entry.end_time = datetime.strptime(request.form['end_time'], '%H:%M').time()
 
-    # Update entry details
-    entry.date = datetime.strptime(request.form['date'], '%Y-%m-%d').date()
-    entry.start_time = datetime.strptime(request.form['start_time'], '%H:%M').time()
-    entry.end_time = datetime.strptime(request.form['end_time'], '%H:%M').time()
+        subject = Subject.query.get(request.form['subject_id'])
+        teacher = User.query.get(request.form['teacher_id'])
+        room = Room.query.get(request.form['room_id'])
 
-    subject = Subject.query.get(request.form['subject_id'])
-    teacher = User.query.get(request.form['teacher_id'])
-    room = Room.query.get(request.form['room_id'])
+        if not all([subject, teacher, room]):
+            flash("Invalid data. Please ensure all fields are selected.", "danger")
+            return redirect(url_for('admin_timetable'))
 
-    if subject and teacher and room:
+        # Update entry
         entry.subject = subject.name
         entry.teacher = teacher.username
         entry.room = room.name
@@ -600,8 +602,10 @@ def edit_entry():
         
         db.session.commit()
         flash("Timetable entry updated successfully!", "success")
-    else:
-        flash("Invalid data. Please ensure all fields are selected.", "danger")
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error updating entry: {str(e)}", "danger")
 
     return redirect(url_for('admin_timetable'))
 

@@ -130,6 +130,12 @@
             fetch(`/get_entry_details/${entryId}`)
                 .then(response => response.json())
                 .then(data => {
+                    if (data.error) {
+                        alert('Error loading entry details');
+                        return;
+                    }
+
+                    // Populate form fields
                     document.getElementById('edit_entry_id').value = entryId;
                     document.getElementById('edit_date').value = data.date;
                     document.getElementById('edit_start_time').value = data.start_time;
@@ -137,7 +143,13 @@
                     document.getElementById('edit_subject_id').value = data.subject_id;
                     document.getElementById('edit_teacher_id').value = data.teacher_id;
                     document.getElementById('edit_room_id').value = data.room_id;
+
+                    // Show the modal
                     document.getElementById('editEntryModal').style.display = 'block';
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error loading entry details');
                 });
         }
 
@@ -241,6 +253,12 @@
         function closeAssigneesModal() {
             document.getElementById('manageAssigneesModal').style.display = 'none';
         }
+
+        // Add event listener to the form
+        document.getElementById('editEntryForm').addEventListener('submit', function(e) {
+            // Form will submit normally - no need to prevent default
+            closeEditModal();
+        });
     </script>
 </head>
 <body>
@@ -531,41 +549,60 @@
     <p><a href="{{ url_for('admin') }}">Back to Admin Panel</a></p>
 
     <!-- Edit Entry Modal -->
-    <div id="editEntryModal" class="modal" style="display: none;">
+    <div id="editEntryModal" class="modal">
         <div class="modal-content">
             <h3>Edit Timetable Entry</h3>
-            <form id="editEntryForm" method="post">
+            <form id="editEntryForm" method="post" action="{{ url_for('edit_entry') }}">
                 <input type="hidden" name="action" value="edit_entry">
                 <input type="hidden" name="entry_id" id="edit_entry_id">
 
-                Date: <input type="date" name="date" id="edit_date" required><br>
-                Start Time: <input type="time" name="start_time" id="edit_start_time" required><br>
-                End Time: <input type="time" name="end_time" id="edit_end_time" required><br>
+                <div class="form-group">
+                    <label for="edit_date">Date:</label>
+                    <input type="date" name="date" id="edit_date" required>
+                </div>
 
-                Subject:
-                <select name="subject_id" id="edit_subject_id" required>
-                    {% for subject in subjects %}
-                        <option value="{{ subject.id }}">{{ subject.name }}</option>
-                    {% endfor %}
-                </select><br>
+                <div class="form-group">
+                    <label for="edit_start_time">Start Time:</label>
+                    <input type="time" name="start_time" id="edit_start_time" required>
+                </div>
 
-                Teacher:
-                <select name="teacher_id" id="edit_teacher_id" required>
-                    {% for staff in staff_users %}
-                        <option value="{{ staff.id }}">{{ staff.username }}</option>
-                    {% endfor %}
-                </select><br>
+                <div class="form-group">
+                    <label for="edit_end_time">End Time:</label>
+                    <input type="time" name="end_time" id="edit_end_time" required>
+                </div>
 
-                Room:
-                <select name="room_id" id="edit_room_id" required>
-                    {% for room in rooms %}
-                        <option value="{{ room.id }}">{{ room.name }}</option>
-                    {% endfor %}
-                </select><br>
+                <div class="form-group">
+                    <label for="edit_subject_id">Subject:</label>
+                    <select name="subject_id" id="edit_subject_id" required>
+                        {% for subject in subjects %}
+                            <option value="{{ subject.id }}">{{ subject.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
 
-                <button type="button" onclick="manageAssignees()">Manage Assignees</button>
-                <button type="submit">Save Changes</button>
-                <button type="button" onclick="closeEditModal()">Cancel</button>
+                <div class="form-group">
+                    <label for="edit_teacher_id">Teacher:</label>
+                    <select name="teacher_id" id="edit_teacher_id" required>
+                        {% for staff in staff_users %}
+                            <option value="{{ staff.id }}">{{ staff.username }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="edit_room_id">Room:</label>
+                    <select name="room_id" id="edit_room_id" required>
+                        {% for room in rooms %}
+                            <option value="{{ room.id }}">{{ room.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" onclick="manageAssignees()">Manage Assignees</button>
+                    <button type="submit">Save Changes</button>
+                    <button type="button" onclick="closeEditModal()">Cancel</button>
+                </div>
             </form>
         </div>
     </div>
