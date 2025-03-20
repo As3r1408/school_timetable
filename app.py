@@ -163,18 +163,10 @@ def admin():
         flash("Access denied. Admins only.", "danger")
         return redirect(url_for('dashboard'))
 
-    # Fetch school settings (Week A/B setting)
-    school_settings = SchoolSettings.query.first()
-
     if request.method == 'POST':
         action = request.form.get('action')
-
-        if action == "toggle_week_ab":
-            school_settings.use_week_ab = not school_settings.use_week_ab  # Toggle setting
-            db.session.commit()
-            flash("Week A/B setting updated!", "success")
         
-        elif action == "create_user":
+        if action == "create_user":
             username = request.form['username']
             password = request.form['password']
             role = request.form['role']  # student or staff
@@ -214,7 +206,7 @@ def admin():
                 flash("User not found!", "danger")
 
     users = User.query.filter(User.role != "admin").all()  # Exclude admin from list
-    return render_template('admin.html', users=users, use_week_ab=school_settings.use_week_ab)
+    return render_template('admin.html', users=users)
 
 @app.route('/admin_timetable', methods=['GET', 'POST'])
 def admin_timetable():
@@ -446,7 +438,17 @@ def admin_timetable():
             user = User.query.get(user_id)
             
             if entry and user:
+                # If this is the last user, delete any associated note first
+                if len(entry.users) <= 1:
+                    if entry.note:
+                        db.session.delete(entry.note)
+                
                 entry.users.remove(user)
+                
+                # If no users left, delete the entry
+                if not entry.users:
+                    db.session.delete(entry)
+                
                 db.session.commit()
                 flash(f"Entry removed for user {user.username}.", "info")
             
@@ -457,10 +459,53 @@ def admin_timetable():
             entry = Timetable.query.get(entry_id)
             
             if entry:
+                # First delete any associated note
+                if entry.note:
+                    db.session.delete(entry.note)
+                    
+                # Then delete the entry
                 db.session.delete(entry)
                 db.session.commit()
                 flash("Entry deleted for all users.", "info")
             
+            return redirect(url_for('admin_timetable'))
+
+        elif action == "set_free_day":
+            date = datetime.strptime(request.form["date"], '%Y-%m-%d').date()
+            message = request.form["message"]
+            scope = request.form["scope"]
+
+            # Create a special timetable entry for the free day
+            free_day_entry = Timetable(
+                date=date,
+                subject=message,  # Use subject field to store the message
+                teacher="N/A",
+                start_time=datetime.strptime('00:00', '%H:%M').time(),
+                end_time=datetime.strptime('23:59', '%H:%M').time(),
+                room="N/A",
+                is_substitute=False
+            )
+            free_day_entry.is_free_day = True  # Add this field to your Timetable model
+            db.session.add(free_day_entry)
+
+            # Add users based on scope
+            if scope == "user" and selected_user:
+                free_day_entry.users.append(selected_user)
+            elif scope == "subject" and selected_subject:
+                for assignee in subject_assignees:
+                    user = User.query.get(assignee.user_id)
+                    if user:
+                        free_day_entry.users.append(user)
+            elif scope == "year_group" and selected_year_group:
+                for user in year_group_users:
+                    free_day_entry.users.append(user)
+            elif scope == "all":
+                all_users = User.query.filter(User.role != "admin").all()
+                for user in all_users:
+                    free_day_entry.users.append(user)
+
+            db.session.commit()
+            flash(f"Free day set for {date.strftime('%Y-%m-%d')}", "success")
             return redirect(url_for('admin_timetable'))
 
     return render_template(
@@ -721,6 +766,38 @@ def get_note(entry_id):
             'updated_at': entry.note.updated_at.strftime('%Y-%m-%d %H:%M')
         })
     return jsonify({'error': 'No note found'}), 404
+
+@app.route('/edit_free_day', methods=['POST'])
+def edit_free_day():
+    if 'user_id' not in session or session['role'] != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    try:
+        entry_id = request.form.get('entry_id')
+        entry = Timetable.query.get_or_404(entry_id)
+
+        if not entry.is_free_day:
+            flash("Invalid operation: This entry is not a free day.", "danger")
+            return redirect(url_for('admin_timetable'))
+
+        # Update free day details
+        entry.date = datetime.strptime(request.form['date'], '%Y-%m-%d').date()
+        entry.subject = request.form['message']  # Update description
+        
+        # Update week and day_of_week
+        entry.week = entry.date.isocalendar()[1]
+        if entry.date.weekday() == 0:  # If it's Monday
+            previous_sunday = entry.date - timedelta(days=1)
+            entry.week = previous_sunday.isocalendar()[1] + 1
+        entry.day_of_week = entry.date.strftime('%A')
+        
+        db.session.commit()
+        flash("Free day updated successfully!", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error updating free day: {str(e)}", "danger")
+
+    return redirect(url_for('admin_timetable'))
 
 # Ensure this is at the bottom
 if __name__ == "__main__":

@@ -35,6 +35,7 @@ class Timetable(db.Model):
     end_time = db.Column(db.Time, nullable=False)
     room = db.Column(db.String(100), nullable=True)
     is_substitute = db.Column(db.Boolean, default=False)
+    is_free_day = db.Column(db.Boolean, default=False)
     users = db.relationship('User', secondary=user_timetable, backref=db.backref('timetables', lazy='dynamic'))
 
     def __init__(self, date, subject, teacher, start_time, end_time, room=None, is_substitute=False):
@@ -44,6 +45,7 @@ class Timetable(db.Model):
         self.end_time = end_time
         self.room = room  # Room is optional
         self.is_substitute = is_substitute
+        self.is_free_day = False
 
         # Ensure `date` is always a `datetime.date` object
         if isinstance(date, str):  

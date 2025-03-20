@@ -315,11 +315,13 @@
         }
 
         function updateTeacherListForSubject() {
-            const subjectSelect = document.querySelector('select[name="subject_id"]');
-            const isSubstitute = document.getElementById('subject_is_substitute').checked;
+            const subjectSelect = document.querySelector('#editBySubject select[name="subject_id"], #timetableForm select[name="subject_id"]');
+            const isSubstituteCheckbox = document.getElementById('subject_is_substitute');
+            const isSubstitute = isSubstituteCheckbox ? isSubstituteCheckbox.checked : false;
             const teacherSelect = document.getElementById('subject_teacher_select');
 
-            // Clear current options
+            if (!subjectSelect || !teacherSelect || !subjectSelect.value) return;
+
             teacherSelect.innerHTML = '<option value="">Select a teacher</option>';
 
             fetch(`/get_subject_teachers/${subjectSelect.value}?is_substitute=${isSubstitute}`)
@@ -335,11 +337,13 @@
         }
 
         function updateTeacherListForYearGroup() {
-            const subjectSelect = document.querySelector('select[name="subject_id"]');
-            const isSubstitute = document.getElementById('year_group_is_substitute').checked;
+            const subjectSelect = document.querySelector('#editByYearGroup select[name="subject_id"], #timetableForm select[name="subject_id"]');
+            const isSubstituteCheckbox = document.getElementById('year_group_is_substitute');
+            const isSubstitute = isSubstituteCheckbox ? isSubstituteCheckbox.checked : false;
             const teacherSelect = document.getElementById('year_group_teacher_select');
 
-            // Clear current options
+            if (!subjectSelect || !teacherSelect || !subjectSelect.value) return;
+
             teacherSelect.innerHTML = '<option value="">Select a teacher</option>';
 
             fetch(`/get_subject_teachers/${subjectSelect.value}?is_substitute=${isSubstitute}`)
@@ -379,15 +383,828 @@
                 });
             });
         });
+
+        // Add to the existing script section
+        function showFreeDayEditForm(entryId, description, date) {
+            document.getElementById('edit_free_day_id').value = entryId;
+            document.getElementById('edit_free_day_date').value = date;
+            document.getElementById('edit_free_day_message').value = description;
+            document.getElementById('editFreeDayModal').style.display = 'block';
+        }
+
+        function closeFreeDayEditModal() {
+            document.getElementById('editFreeDayModal').style.display = 'none';
+        }
+
+        // Update the window onclick handler to include the new modal
+        window.onclick = function(event) {
+            if (event.target == document.getElementById('freeDayModal')) {
+                closeFreeDayModal();
+            } else if (event.target == document.getElementById('editFreeDayModal')) {
+                closeFreeDayEditModal();
+            } else if (event.target == document.getElementById('noteModal')) {
+                closeNoteModal();
+            }
+        }
+
+        function showAddNote(entryId) {
+            document.getElementById('noteModalTitle').textContent = 'Add Note';
+            document.getElementById('note_entry_id').value = entryId;
+            document.getElementById('noteContent').value = '';
+            document.getElementById('noteModal').style.display = 'block';
+        }
+
+        function showEditNote(entryId) {
+            document.getElementById('noteModalTitle').textContent = 'Edit Note';
+            document.getElementById('note_entry_id').value = entryId;
+            
+            fetch(`/get_note/${entryId}`)
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('noteContent').value = data.content;
+                    document.getElementById('noteModal').style.display = 'block';
+                });
+        }
+
+        function saveNote(event) {
+            event.preventDefault();
+            const entryId = document.getElementById('note_entry_id').value;
+            const content = document.getElementById('noteContent').value;
+            
+            if (!content.trim()) {
+                alert('Please enter a note before saving.');
+                return;
+            }
+
+            fetch('/add_note', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    entry_id: entryId,
+                    content: content
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    closeNoteModal();
+                    location.reload();
+                } else {
+                    alert('Error saving note: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error saving note. Please try again.');
+            });
+        }
+
+        function closeNoteModal() {
+            document.getElementById('noteModal').style.display = 'none';
+        }
+
+        // Update the function for initializing teacher lists
+        document.addEventListener('DOMContentLoaded', function() {
+            const subjectTeacherSelect = document.getElementById('subject_teacher_select');
+            const yearGroupTeacherSelect = document.getElementById('year_group_teacher_select');
+            const regularTeacherSelect = document.getElementById('teacher_select');
+            
+            // Add event listeners for subject dropdowns
+            const subjectSelects = document.querySelectorAll('select[name="subject_id"]');
+            subjectSelects.forEach(select => {
+                select.addEventListener('change', function() {
+                    const form = this.closest('form');
+                    if (form.querySelector('#subject_teacher_select')) {
+                        updateTeacherListForSubject();
+                    } else if (form.querySelector('#year_group_teacher_select')) {
+                        updateTeacherListForYearGroup();
+                    } else if (form.querySelector('#teacher_select')) {
+                        updateTeacherList();
+                    }
+                });
+
+                // Trigger initial update for each subject select
+                if (select.closest('form').querySelector('#subject_teacher_select')) {
+                    updateTeacherListForSubject();
+                } else if (select.closest('form').querySelector('#year_group_teacher_select')) {
+                    updateTeacherListForYearGroup();
+                } else if (select.closest('form').querySelector('#teacher_select')) {
+                    updateTeacherList();
+                }
+            });
+        });
+
+        // Update the updateTeacherList function to handle null values
+        function updateTeacherList() {
+            const subjectSelect = document.getElementById('subject_select');
+            const isSubstitute = document.getElementById('is_substitute')?.checked || false;
+            const teacherSelect = document.getElementById('teacher_select');
+
+            if (!subjectSelect || !teacherSelect) return;
+
+            // Clear current options
+            teacherSelect.innerHTML = '<option value="">Select a teacher</option>';
+
+            // Get teachers based on subject and substitute status
+            fetch(`/get_subject_teachers/${subjectSelect.value}?is_substitute=${isSubstitute}`)
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(teacher => {
+                        const option = document.createElement('option');
+                        option.value = teacher.id;
+                        option.text = teacher.username;
+                        teacherSelect.add(option);
+                    });
+                });
+        }
+
+        // Similar updates for other teacher list functions
+        function updateTeacherListForSubject() {
+            const subjectSelect = document.querySelector('select[name="subject_id"]');
+            const isSubstitute = document.getElementById('subject_is_substitute')?.checked || false;
+            const teacherSelect = document.getElementById('subject_teacher_select');
+
+            if (!subjectSelect || !teacherSelect) return;
+
+            teacherSelect.innerHTML = '<option value="">Select a teacher</option>';
+
+            fetch(`/get_subject_teachers/${subjectSelect.value}?is_substitute=${isSubstitute}`)
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(teacher => {
+                        const option = document.createElement('option');
+                        option.value = teacher.id;
+                        option.text = teacher.username;
+                        teacherSelect.add(option);
+                    });
+                });
+        }
+
+        function updateTeacherListForYearGroup() {
+            const subjectSelect = document.querySelector('select[name="subject_id"]');
+            const isSubstitute = document.getElementById('year_group_is_substitute')?.checked || false;
+            const teacherSelect = document.getElementById('year_group_teacher_select');
+
+            if (!subjectSelect || !teacherSelect) return;
+
+            teacherSelect.innerHTML = '<option value="">Select a teacher</option>';
+
+            fetch(`/get_subject_teachers/${subjectSelect.value}?is_substitute=${isSubstitute}`)
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(teacher => {
+                        const option = document.createElement('option');
+                        option.value = teacher.id;
+                        option.text = teacher.username;
+                        teacherSelect.add(option);
+                    });
+                });
+        }
+
+        // Update the initialization code 
+        document.addEventListener('DOMContentLoaded', function() {
+            const subjectSelects = document.querySelectorAll('select[name="subject_id"]');
+            
+            subjectSelects.forEach(select => {
+                // First trigger the change event on load
+                const changeEvent = new Event('change');
+                select.dispatchEvent(changeEvent);
+                
+                // Add change event listener
+                select.addEventListener('change', function() {
+                    const form = this.closest('form');
+                    if (form.querySelector('#subject_teacher_select')) {
+                        updateTeacherListForSubject();
+                    } else if (form.querySelector('#year_group_teacher_select')) {
+                        updateTeacherListForYearGroup();
+                    } else if (form.querySelector('#teacher_select')) {
+                        updateTeacherList();
+                    }
+                });
+            });
+        });
+
+        // Update all teacher list functions to handle the initial load better
+        function updateTeacherList() {
+            const subjectSelect = document.getElementById('subject_select');
+            const isSubstituteCheckbox = document.getElementById('is_substitute');
+            const isSubstitute = isSubstituteCheckbox ? isSubstituteCheckbox.checked : false;
+            const teacherSelect = document.getElementById('teacher_select');
+
+            if (!subjectSelect || !teacherSelect || !subjectSelect.value) return;
+
+            teacherSelect.innerHTML = '<option value="">Select a teacher</option>';
+
+            fetch(`/get_subject_teachers/${subjectSelect.value}?is_substitute=${isSubstitute}`)
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(teacher => {
+                        const option = document.createElement('option');
+                        option.value = teacher.id;
+                        option.text = teacher.username;
+                        teacherSelect.add(option);
+                    });
+                });
+        }
+
+        function updateTeacherListForSubject() {
+            const subjectSelect = document.querySelector('select[name="subject_id"]');
+            const isSubstituteCheckbox = document.getElementById('subject_is_substitute');
+            const isSubstitute = isSubstituteCheckbox ? isSubstituteCheckbox.checked : false;
+            const teacherSelect = document.getElementById('subject_teacher_select');
+
+            if (!subjectSelect || !teacherSelect || !subjectSelect.value) return;
+
+            teacherSelect.innerHTML = '<option value="">Select a teacher</option>';
+
+            fetch(`/get_subject_teachers/${subjectSelect.value}?is_substitute=${isSubstitute}`)
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(teacher => {
+                        const option = document.createElement('option');
+                        option.value = teacher.id;
+                        option.text = teacher.username;
+                        teacherSelect.add(option);
+                    });
+                });
+        }
+
+        function updateTeacherListForYearGroup() {
+            const subjectSelect = document.querySelector('select[name="subject_id"]');
+            const isSubstituteCheckbox = document.getElementById('year_group_is_substitute');
+            const isSubstitute = isSubstituteCheckbox ? isSubstituteCheckbox.checked : false;
+            const teacherSelect = document.getElementById('year_group_teacher_select');
+
+            if (!subjectSelect || !teacherSelect || !subjectSelect.value) return;
+
+            teacherSelect.innerHTML = '<option value="">Select a teacher</option>';
+
+            fetch(`/get_subject_teachers/${subjectSelect.value}?is_substitute=${isSubstitute}`)
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(teacher => {
+                        const option = document.createElement('option');
+                        option.value = teacher.id;
+                        option.text = teacher.username;
+                        teacherSelect.add(option);
+                    });
+                });
+        }
+
+        // Update these functions in the script section
+        function updateTeacherListForSubject() {
+            const subjectSelect = document.querySelector('#timetableForm select[name="subject_id"]');
+            const isSubstituteCheckbox = document.getElementById('subject_is_substitute');
+            const isSubstitute = isSubstituteCheckbox ? isSubstituteCheckbox.checked : false;
+            const teacherSelect = document.getElementById('subject_teacher_select');
+
+            if (!subjectSelect || !teacherSelect) return;
+
+            teacherSelect.innerHTML = '<option value="">Select a teacher</option>';
+
+            // Get teachers based on selected subject
+            fetch(`/get_subject_teachers/${subjectSelect.value}?is_substitute=${isSubstitute}`)
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(teacher => {
+                        const option = document.createElement('option');
+                        option.value = teacher.id;
+                        option.text = teacher.username;
+                        teacherSelect.add(option);
+                    });
+                });
+        }
+
+        function updateTeacherListForYearGroup() {
+            const subjectSelect = document.querySelector('#timetableForm select[name="subject_id"]');
+            const isSubstituteCheckbox = document.getElementById('year_group_is_substitute');
+            const isSubstitute = isSubstituteCheckbox ? isSubstituteCheckbox.checked : false;
+            const teacherSelect = document.getElementById('year_group_teacher_select');
+
+            if (!subjectSelect || !teacherSelect) return;
+
+            teacherSelect.innerHTML = '<option value="">Select a teacher</option>';
+
+            // Get teachers based on selected subject
+            fetch(`/get_subject_teachers/${subjectSelect.value}?is_substitute=${isSubstitute}`)
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(teacher => {
+                        const option = document.createElement('option');
+                        option.value = teacher.id;
+                        option.text = teacher.username;
+                        teacherSelect.add(option);
+                    });
+                });
+        }
+
+        // Update the initialization code
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initial update for all forms
+            if (document.getElementById('subject_teacher_select')) {
+                // For Edit by Subject
+                const subjectSelect = document.querySelector('#timetableForm select[name="subject_id"]');
+                if (subjectSelect) {
+                    updateTeacherListForSubject();
+                    subjectSelect.addEventListener('change', updateTeacherListForSubject);
+                }
+            }
+            
+            if (document.getElementById('year_group_teacher_select')) {
+                // For Edit by Year Group
+                const subjectSelect = document.querySelector('#timetableForm select[name="subject_id"]');
+                if (subjectSelect) {
+                    updateTeacherListForYearGroup();
+                    subjectSelect.addEventListener('change', updateTeacherListForYearGroup);
+                }
+            }
+            
+            if (document.getElementById('teacher_select')) {
+                // For Edit by User
+                const subjectSelect = document.getElementById('subject_select');
+                if (subjectSelect) {
+                    updateTeacherList();
+                    subjectSelect.addEventListener('change', updateTeacherList);
+                }
+            }
+
+            // Add change event listeners for substitute checkboxes
+            const substituteCheckboxes = document.querySelectorAll('input[type="checkbox"][name="is_substitute"]');
+            substituteCheckboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', function() {
+                    const form = this.closest('form');
+                    if (form.querySelector('#subject_teacher_select')) {
+                        updateTeacherListForSubject();
+                    } else if (form.querySelector('#year_group_teacher_select')) {
+                        updateTeacherListForYearGroup();
+                    } else if (form.querySelector('#teacher_select')) {
+                        updateTeacherList();
+                    }
+                });
+            });
+        });
+
+        // Update the initialization code
+        document.addEventListener('DOMContentLoaded', function() {
+            // For Edit by User - works correctly
+            if (document.getElementById('subject_select')) {
+                updateTeacherList();
+            }
+            
+            // Add similar initialization for Subject and Year Group
+            if (document.getElementById('subject_teacher_select')) {
+                const subjectSelect = document.querySelector('#timetableForm select[name="subject_id"]');
+                if (subjectSelect && subjectSelect.value) {
+                    updateTeacherListForSubject();
+                }
+            }
+            
+            if (document.getElementById('year_group_teacher_select')) {
+                const subjectSelect = document.querySelector('#timetableForm select[name="subject_id"]');
+                if (subjectSelect && subjectSelect.value) {
+                    updateTeacherListForYearGroup();
+                }
+            }
+
+            // Add change event listeners
+            const subjectSelects = document.querySelectorAll('select[name="subject_id"]');
+            subjectSelects.forEach(select => {
+                select.addEventListener('change', function() {
+                    const form = this.closest('form');
+                    if (form.querySelector('#subject_teacher_select')) {
+                        updateTeacherListForSubject();
+                    } else if (form.querySelector('#year_group_teacher_select')) {
+                        updateTeacherListForYearGroup();
+                    } else if (form.querySelector('#teacher_select')) {
+                        updateTeacherList();
+                    }
+                });
+            });
+        });
+
+        // Update the teacher list functions
+        function updateTeacherListForSubject() {
+            const subjectSelect = document.querySelector('#timetableForm select[name="subject_id"]');
+            const isSubstituteCheckbox = document.getElementById('subject_is_substitute');
+            const isSubstitute = isSubstituteCheckbox ? isSubstituteCheckbox.checked : false;
+            const teacherSelect = document.getElementById('subject_teacher_select');
+
+            if (!subjectSelect || !teacherSelect) return;
+
+            // Clear current options
+            teacherSelect.innerHTML = '<option value="">Select a teacher</option>';
+
+            // Get teachers for selected subject
+            fetch(`/get_subject_teachers/${subjectSelect.value}?is_substitute=${isSubstitute}`)
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(teacher => {
+                        const option = document.createElement('option');
+                        option.value = teacher.id;
+                        option.text = teacher.username;
+                        teacherSelect.add(option);
+                    });
+                });
+        }
+
+        function updateTeacherListForYearGroup() {
+            const subjectSelect = document.querySelector('#timetableForm select[name="subject_id"]');
+            const isSubstituteCheckbox = document.getElementById('year_group_is_substitute');
+            const isSubstitute = isSubstituteCheckbox ? isSubstituteCheckbox.checked : false;
+            const teacherSelect = document.getElementById('year_group_teacher_select');
+
+            if (!subjectSelect || !teacherSelect) return;
+
+            // Clear current options
+            teacherSelect.innerHTML = '<option value="">Select a teacher</option>';
+
+            // Get teachers for selected subject
+            fetch(`/get_subject_teachers/${subjectSelect.value}?is_substitute=${isSubstitute}`)
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(teacher => {
+                        const option = document.createElement('option');
+                        option.value = teacher.id;
+                        option.text = teacher.username;
+                        teacherSelect.add(option);
+                    });
+                });
+        }
+
+        // Update the initialization code
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initial updates for each form type if it exists
+            const bySubjectForm = document.getElementById('timetableForm');
+            if (bySubjectForm) {
+                const subjectSelect = bySubjectForm.querySelector('select[name="subject_id"]');
+                const teacherSelect = document.getElementById('subject_teacher_select');
+                const yearGroupTeacherSelect = document.getElementById('year_group_teacher_select');
+                
+                if (subjectSelect && subjectSelect.value) {
+                    // For Edit by Subject
+                    if (teacherSelect) {
+                        updateTeacherListForSubject();
+                    }
+                    // For Edit by Year Group
+                    if (yearGroupTeacherSelect) {
+                        updateTeacherListForYearGroup();
+                    }
+                }
+
+                // Add change event listeners
+                subjectSelect?.addEventListener('change', function() {
+                    if (teacherSelect) {
+                        updateTeacherListForSubject();
+                    } else if (yearGroupTeacherSelect) {
+                        updateTeacherListForYearGroup();
+                    }
+                });
+            }
+
+            // Add event listeners for substitute checkboxes
+            const substituteCheckboxes = document.querySelectorAll('input[type="checkbox"][name="is_substitute"]');
+            substituteCheckboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', function() {
+                    const form = this.closest('form');
+                    if (form.querySelector('#subject_teacher_select')) {
+                        updateTeacherListForSubject();
+                    } else if (form.querySelector('#year_group_teacher_select')) {
+                        updateTeacherListForYearGroup();
+                    }
+                });
+            });
+        });
+
+        // Update the initialization code in the script section
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize teacher lists for all forms that exist
+            if (document.getElementById('subject_select')) {
+                // For Edit by User form
+                const subjectSelect = document.getElementById('subject_select');
+                if (subjectSelect.value) {
+                    updateTeacherList();
+                }
+            }
+
+            // For Edit by Subject form
+            if (document.getElementById('subject_teacher_select')) {
+                const subjectSelect = document.querySelector('#timetableForm select[name="subject_id"]');
+                if (subjectSelect && subjectSelect.value) {
+                    updateTeacherListForSubject();
+                }
+            }
+
+            // For Edit by Year Group form
+            if (document.getElementById('year_group_teacher_select')) {
+                const subjectSelect = document.querySelector('#timetableForm select[name="subject_id"]');
+                if (subjectSelect && subjectSelect.value) {
+                    updateTeacherListForYearGroup();
+                }
+            }
+
+            // Add change event listeners for subject dropdowns
+            const subjectSelects = document.querySelectorAll('select[name="subject_id"]');
+            subjectSelects.forEach(select => {
+                // Trigger update when subject changes
+                select.addEventListener('change', function() {
+                    const form = this.closest('form');
+                    if (form.querySelector('#subject_teacher_select')) {
+                        updateTeacherListForSubject();
+                    } else if (form.querySelector('#year_group_teacher_select')) {
+                        updateTeacherListForYearGroup();
+                    } else if (form.querySelector('#teacher_select')) {
+                        updateTeacherList();
+                    }
+                });
+            });
+
+            // Add change event listeners for substitute checkboxes
+            const substituteCheckboxes = document.querySelectorAll('input[type="checkbox"][name="is_substitute"]');
+            substituteCheckboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', function() {
+                    const form = this.closest('form');
+                    if (form.querySelector('#subject_teacher_select')) {
+                        updateTeacherListForSubject();
+                    } else if (form.querySelector('#year_group_teacher_select')) {
+                        updateTeacherListForYearGroup();
+                    } else if (form.querySelector('#teacher_select')) {
+                        updateTeacherList();
+                    }
+                });
+            });
+        });
+
+        // Update the initialization code
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize teacher lists for subject and year group forms
+            if (document.querySelector('#timetableForm')) {
+                const subjectSelect = document.querySelector('#timetableForm select[name="subject_id"]');
+                const teacherSelect = document.getElementById('subject_teacher_select');
+                const yearGroupTeacherSelect = document.getElementById('year_group_teacher_select');
+
+                if (subjectSelect && subjectSelect.value) {
+                    if (teacherSelect) {
+                        // For Edit by Subject form
+                        fetch(`/get_subject_teachers/${subjectSelect.value}?is_substitute=false`)
+                            .then(response => response.json())
+                            .then(data => {
+                                teacherSelect.innerHTML = '<option value="">Select a teacher</option>';
+                                data.forEach(teacher => {
+                                    const option = document.createElement('option');
+                                    option.value = teacher.id;
+                                    option.text = teacher.username;
+                                    teacherSelect.add(option);
+                                });
+                            });
+                    } else if (yearGroupTeacherSelect) {
+                        // For Edit by Year Group form
+                        fetch(`/get_subject_teachers/${subjectSelect.value}?is_substitute=false`)
+                            .then(response => response.json())
+                            .then(data => {
+                                yearGroupTeacherSelect.innerHTML = '<option value="">Select a teacher</option>';
+                                data.forEach(teacher => {
+                                    const option = document.createElement('option');
+                                    option.value = teacher.id;
+                                    option.text = teacher.username;
+                                    yearGroupTeacherSelect.add(option);
+                                });
+                            });
+                    }
+                }
+
+                // Add change event listeners
+                if (subjectSelect) {
+                    subjectSelect.addEventListener('change', function() {
+                        if (teacherSelect) {
+                            updateTeacherListForSubject();
+                        } else if (yearGroupTeacherSelect) {
+                            updateTeacherListForYearGroup();
+                        }
+                    });
+                }
+            }
+        });
     </script>
+    <style>
+    .mode-buttons {
+        margin: 20px 0;
+    }
+
+    .mode-buttons button {
+        margin-right: 10px;
+        padding: 8px 16px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .mode-buttons button:hover {
+        background-color: #0056b3;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px 0;
+    }
+
+    table th, table td {
+        padding: 8px;
+        text-align: left;
+        border: 1px solid #ddd;
+    }
+
+    table th {
+        background-color: #f8f9fa;
+    }
+
+    table tr:nth-child(even) {
+        background-color: #f8f9fa;
+    }
+
+    table tr:hover {
+        background-color: #f2f2f2;
+    }
+
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.5);
+    }
+
+    .modal-content {
+        background-color: #fefefe;
+        margin: 15% auto;
+        padding: 20px;
+        border: 1px solid #888;
+        width: 60%;
+        max-width: 600px;
+        border-radius: 5px;
+        position: relative;
+    }
+
+    .search-container {
+        margin-bottom: 15px;
+    }
+
+    .search-container input {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+
+    .assignees-container {
+        display: flex;
+        gap: 20px;
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    .checkbox-list {
+        border: 1px solid #ddd;
+        padding: 10px;
+        border-radius: 4px;
+    }
+
+    .checkbox-item {
+        display: flex;
+        align-items: center;
+        padding: 5px 0;
+    }
+
+    .checkbox-item input[type="checkbox"] {
+        margin-right: 8px;
+    }
+
+    .modal-footer {
+        margin-top: 15px;
+        text-align: right;
+    }
+
+    .modal-footer button {
+        margin-left: 10px;
+    }
+
+    .modal-footer button.danger {
+        background-color: #dc3545;
+        color: white;
+    }
+
+    .modal-footer button.danger:hover {
+        background-color: #c82333;
+    }
+
+    #assignedUsersList {
+        max-height: 200px;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+        padding: 10px;
+        margin: 10px 0;
+        border-radius: 4px;
+    }
+
+    #assignedUsersList li {
+        padding: 4px 0;
+        border-bottom: 1px solid #eee;
+    }
+
+    #assignedUsersList li:last-child {
+        border-bottom: none;
+    }
+
+    /* Add to existing style section */
+    #edit_free_day_message {
+        width: 100%;
+        padding: 8px;
+        margin: 5px 0;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        resize: vertical;
+        min-height: 100px;
+    }
+
+    .free-day-entry {
+        background-color: #f8f9fa;
+        padding: 10px;
+        border-radius: 4px;
+        border: 1px dashed #ccc;
+        margin: 5px 0;
+    }
+
+    .free-day-entry strong {
+        color: #dc3545;
+        font-size: 1.1em;
+    }
+
+    .free-day-entry .description {
+        font-style: italic;
+        color: #666;
+        margin: 5px 0;
+    }
+
+    #noteContent {
+        width: 100%;
+        margin: 10px 0;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        resize: vertical;
+        min-height: 100px;
+    }
+
+    .note-button {
+        background-color: #28a745;
+        color: white;
+        margin-left: 5px;
+    }
+
+    .note-button:hover {
+        background-color: #218838;
+    }
+
+    #free_day_message {
+        width: 100%;
+        padding: 8px;
+        margin: 5px 0;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        resize: vertical;
+    }
+
+    .free-day-entry {
+        background-color: #f8f9fa;
+        padding: 10px;
+        border-radius: 4px;
+        border: 1px dashed #ccc;
+        margin: 5px 0;
+        text-align: center;
+    }
+
+    .free-day-entry .message {
+        font-style: italic;
+        color: #666;
+    }
+    </style>
 </head>
 <body>
     <h2>Admin - Manage Timetables</h2>
-
-    <!-- Initial Buttons -->
-    <button onclick="showEditByUser()">Edit by User</button>
-    <button onclick="showEditBySubject()">Edit by Subject</button>
-    <button onclick="showEditByYearGroup()">Edit by Year Group</button>
+    
+    <!-- Mode Selection Buttons -->
+    <div class="mode-buttons">
+        <button type="button" onclick="showEditByUser()">Edit by User</button>
+        <button type="button" onclick="showEditBySubject()">Edit by Subject</button>
+        <button type="button" onclick="showEditByYearGroup()">Edit by Year Group</button>
+    </div>
 
     <!-- Edit by User Section -->
     <div id="editByUser" style="display: none;">
@@ -395,20 +1212,22 @@
         <input type="text" id="searchUser" placeholder="Search users...">
         <table border="1">
             <tr>
-                <th>User Name</th>
+                <th>Username</th>
+                <th>Role</th>
                 <th>Year Group</th>
                 <th>Subjects</th>
-                <th>Edit Timetable</th>
+                <th>Edit Timetables</th>
             </tr>
             {% for user in users %}
                 <tr>
                     <td>{{ user.username }}</td>
-                    <td>{% if user.role == 'student' %}{{ user.year_group }}{% else %}Staff{% endif %}</td>
+                    <td>{{ user.role }}</td>
+                    <td>{{ user.year_group if user.year_group else "N/A" }}</td>
                     <td>
                         <button type="button" onclick="showSubjects({{ user.id }})">View Subjects</button>
                     </td>
                     <td>
-                        <button type="button" onclick="showUserTimetable({{ user.id }})">Edit Timetable</button>
+                        <button type="button" onclick="showUserTimetable({{ user.id }})">Edit Timetables</button>
                     </td>
                 </tr>
             {% endfor %}
@@ -423,7 +1242,7 @@
             <tr>
                 <th>Subject</th>
                 <th>Type</th>
-                <th>Staff Members</th>
+                <th>Teachers</th>
                 <th>Students</th>
                 <th>Edit Timetables</th>
             </tr>
@@ -575,9 +1394,11 @@
                 End Time: <input type="time" name="end_time" required><br>
 
                 Select Subject:
-                <select name="subject_id" required>
+                <select name="subject_id" required onchange="updateTeacherListForSubject()">
                     {% for subject in subjects %}
-                        <option value="{{ subject.id }}">{{ subject.name }}</option>
+                        <option value="{{ subject.id }}" {% if subject.id == selected_subject.id %}selected{% endif %}>
+                            {{ subject.name }}
+                        </option>
                     {% endfor %}
                 </select><br>
 
@@ -612,7 +1433,7 @@
                 End Time: <input type="time" name="end_time" required><br>
 
                 Select Subject:
-                <select name="subject_id" required>
+                <select name="subject_id" required onchange="updateTeacherListForYearGroup()">
                     {% for subject in subjects %}
                         <option value="{{ subject.id }}">{{ subject.name }}</option>
                     {% endfor %}
@@ -654,35 +1475,52 @@
                         <ul>
                             {% for entry in timetable if entry.date.strftime('%A') == day %}
                                 <li>
-                                    {{ entry.start_time.strftime('%H:%M') }} - {{ entry.end_time.strftime('%H:%M') }}<br>
-                                    <strong>{{ entry.subject }}</strong><br>
-                                    {{ entry.teacher }}{% if entry.is_substitute %} (Substitute){% endif %}<br>
-                                    Room: {{ entry.room if entry.room else "Not assigned" }}<br>
-                                    
-                                    <!-- Add Edit button -->
-                                    <button type="button" onclick="showEditForm('{{ entry.id }}')">Edit</button>
+                                    {% if entry.is_free_day %}
+                                        <div class="free-day-entry">
+                                            <strong>Free Day</strong><br>
+                                            {{ entry.start_time.strftime('%H:%M') }} - {{ entry.end_time.strftime('%H:%M') }}<br>
+                                            <span class="description">Description: {{ entry.subject }}</span><br>
+                                            
+                                            <!-- Add Edit button -->
+                                            <button type="button" onclick="showFreeDayEditForm('{{ entry.id }}', '{{ entry.subject }}', '{{ entry.date }}')">Edit</button>
 
-                                    {% if selected_user %}
-                                        <!-- Only show Delete for User in Edit by User mode -->
-                                        <form method="post" style="display:inline;">
-                                            <input type="hidden" name="action" value="delete_entry_for_user">
-                                            <input type="hidden" name="entry_id" value="{{ entry.id }}">
-                                            <input type="hidden" name="user_id" value="{{ selected_user.id }}">
-                                            <button type="submit" onclick="return confirm('Remove this entry for {{ selected_user.username }}?')">
-                                                Delete for User
-                                            </button>
-                                        </form>
-                                    {% endif %}
+                                            <!-- Delete button -->
+                                            <button type="button" onclick="showDeleteConfirmation('{{ entry.id }}', event)">Delete</button>
+                                            <hr>
+                                        </div>
+                                    {% else %}
+                                        {{ entry.start_time.strftime('%H:%M') }} - {{ entry.end_time.strftime('%H:%M') }}<br>
+                                        <strong>{{ entry.subject }}</strong><br>
+                                        {{ entry.teacher }}{% if entry.is_substitute %} (Substitute){% endif %}<br>
+                                        Room: {{ entry.room if entry.room else "Not assigned" }}<br>
+                                        
+                                        <!-- Add Edit button -->
+                                        <button type="button" onclick="showEditForm('{{ entry.id }}')">Edit</button>
 
-                                    <!-- Delete for All button -->
-                                    <form method="post" style="display:inline;">
-                                        <input type="hidden" name="action" value="delete_entry_for_all">
-                                        <input type="hidden" name="entry_id" value="{{ entry.id }}">
+                                        {% if selected_user %}
+                                            <!-- Only show Delete for User in Edit by User mode -->
+                                            <form method="post" style="display:inline;">
+                                                <input type="hidden" name="action" value="delete_entry_for_user">
+                                                <input type="hidden" name="entry_id" value="{{ entry.id }}">
+                                                <input type="hidden" name="user_id" value="{{ selected_user.id }}">
+                                                <button type="submit" onclick="return confirm('Remove this entry for {{ selected_user.username }}?')">
+                                                    Delete for User
+                                                </button>
+                                            </form>
+                                        {% endif %}
+
+                                        <!-- Delete for All button -->
                                         <button type="button" onclick="showDeleteConfirmation('{{ entry.id }}', event)">
                                             Delete for All
                                         </button>
-                                    </form>
-                                    <hr>
+
+                                        {% if entry.note %}
+                                            <button type="button" onclick="showEditNote('{{ entry.id }}')">Edit Note</button>
+                                        {% else %}
+                                            <button type="button" onclick="showAddNote('{{ entry.id }}')">Add Note</button>
+                                        {% endif %}
+                                        <hr>
+                                    {% endif %}
                                 </li>
                             {% endfor %}
                         </ul>
@@ -821,100 +1659,105 @@
         </div>
     </div>
 
-    <!-- Add CSS styles -->
-    <style>
-    .modal {
-        display: none;
-        position: fixed;
-        z-index: 1000;
-        left: 0;
-        top: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0,0,0,0.5);
+    <!-- Add this modal form before the closing body tag -->
+    <div id="freeDayModal" class="modal">
+        <div class="modal-content">
+            <h3>Set Free Day</h3>
+            <form id="freeDayForm" method="post">
+                <input type="hidden" name="action" value="set_free_day">
+                
+                <div class="form-group">
+                    <label for="free_day_date">Date:</label>
+                    <input type="date" name="date" id="free_day_date" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="free_day_message">Message:</label>
+                    <textarea name="message" id="free_day_message" rows="3" required 
+                        placeholder="e.g., Public Holiday, Staff Development Day, etc."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="free_day_scope">Apply to:</label>
+                    <select name="scope" id="free_day_scope" required>
+                        {% if selected_user %}
+                            <option value="user">Selected User Only</option>
+                        {% endif %}
+                        {% if selected_subject %}
+                            <option value="subject">All Users in Selected Subject</option>
+                        {% endif %}
+                        {% if selected_year_group %}
+                            <option value="year_group">All Users in Selected Year Group</option>
+                        {% endif %}
+                        <option value="all">All Users</option>
+                    </select>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="submit">Set Free Day</button>
+                    <button type="button" onclick="closeFreeDayModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add this JavaScript -->
+    <script>
+    function showFreeDayForm() {
+        document.getElementById('freeDayModal').style.display = 'block';
     }
 
-    .modal-content {
-        background-color: #fefefe;
-        margin: 15% auto;
-        padding: 20px;
-        border: 1px solid #888;
-        width: 60%;
-        max-width: 600px;
-        border-radius: 5px;
-        position: relative;
+    function closeFreeDayModal() {
+        document.getElementById('freeDayModal').style.display = 'none';
     }
 
-    .search-container {
-        margin-bottom: 15px;
+    // Close modal if clicking outside
+    window.onclick = function(event) {
+        if (event.target == document.getElementById('freeDayModal')) {
+            closeFreeDayModal();
+        }
     }
+    </script>
 
-    .search-container input {
-        width: 100%;
-        padding: 8px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-    }
+    <!-- Add Free Day Edit Modal -->
+    <div id="editFreeDayModal" class="modal">
+        <div class="modal-content">
+            <h3>Edit Free Day</h3>
+            <form id="editFreeDayForm" method="post">
+                <input type="hidden" name="action" value="edit_free_day">
+                <input type="hidden" name="entry_id" id="edit_free_day_id">
+                
+                <div class="form-group">
+                    <label for="edit_free_day_date">Date:</label>
+                    <input type="date" name="date" id="edit_free_day_date" required>
+                </div>
 
-    .assignees-container {
-        display: flex;
-        gap: 20px;
-        max-height: 400px;
-        overflow-y: auto;
-    }
+                <div class="form-group">
+                    <label for="edit_free_day_message">Description:</label>
+                    <textarea name="message" id="edit_free_day_message" rows="3" required></textarea>
+                </div>
 
-    .checkbox-list {
-        border: 1px solid #ddd;
-        padding: 10px;
-        border-radius: 4px;
-    }
+                <div class="modal-footer">
+                    <button type="submit">Save Changes</button>
+                    <button type="button" onclick="closeFreeDayEditModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
-    .checkbox-item {
-        display: flex;
-        align-items: center;
-        padding: 5px 0;
-    }
-
-    .checkbox-item input[type="checkbox"] {
-        margin-right: 8px;
-    }
-
-    .modal-footer {
-        margin-top: 15px;
-        text-align: right;
-    }
-
-    .modal-footer button {
-        margin-left: 10px;
-    }
-
-    .modal-footer button.danger {
-        background-color: #dc3545;
-        color: white;
-    }
-
-    .modal-footer button.danger:hover {
-        background-color: #c82333;
-    }
-
-    #assignedUsersList {
-        max-height: 200px;
-        overflow-y: auto;
-        border: 1px solid #ddd;
-        padding: 10px;
-        margin: 10px 0;
-        border-radius: 4px;
-    }
-
-    #assignedUsersList li {
-        padding: 4px 0;
-        border-bottom: 1px solid #eee;
-    }
-
-    #assignedUsersList li:last-child {
-        border-bottom: none;
-    }
-    </style>
-    
+    <!-- Add Note Modal -->
+    <div id="noteModal" class="modal">
+        <div class="modal-content">
+            <h3 id="noteModalTitle">Add Note</h3>
+            <form id="noteForm" onsubmit="saveNote(event)">
+                <input type="hidden" id="note_entry_id">
+                <textarea id="noteContent" rows="4" cols="50"></textarea>
+                <div class="modal-footer">
+                    <button type="submit">Save Note</button>
+                    <button type="button" onclick="closeNoteModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </body>
 </html>
