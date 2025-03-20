@@ -63,6 +63,17 @@ class Timetable(db.Model):
 
         self.day_of_week = self.date.strftime('%A')  # Convert date to day name
 
+# Note Model
+class Note(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    timetable_id = db.Column(db.Integer, db.ForeignKey('timetable.id'), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Add relationship to Timetable
+    timetable = db.relationship('Timetable', backref=db.backref('note', uselist=False))
+
 # Subject Model
 class Subject(db.Model):
     id = db.Column(db.Integer, primary_key=True)

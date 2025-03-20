@@ -48,6 +48,15 @@
                                     <strong>{{ entry.subject }}</strong><br>
                                     {{ entry.teacher }}{% if entry.is_substitute %} (Substitute){% endif %}<br>
                                     Room: {{ entry.room if entry.room else "Not assigned" }}<br>
+                                    {% if permission_level in ['admin', 'staff'] %}
+                                        {% if entry.note %}
+                                            <button type="button" onclick="showEditNote('{{ entry.id }}')">Edit Note</button>
+                                        {% else %}
+                                            <button type="button" onclick="showAddNote('{{ entry.id }}')">Add Note</button>
+                                        {% endif %}
+                                    {% elif entry.note %}
+                                        <button type="button" onclick="viewNote('{{ entry.id }}')">View Note</button>
+                                    {% endif %}
                                     <hr>
                                 </li>
                             {% endfor %}
@@ -61,5 +70,143 @@
     {% endif %}
 
     <p><a href="{{ url_for('dashboard') }}">Back to Dashboard</a></p>
+
+    <!-- Note Modal -->
+    <div id="noteModal" class="modal">
+        <div class="modal-content">
+            <h3 id="noteModalTitle">Add Note</h3>
+            <form id="noteForm" onsubmit="saveNote(event)">
+                <input type="hidden" id="note_entry_id">
+                <textarea id="noteContent" rows="4" cols="50" {% if permission_level not in ['admin', 'staff'] %}readonly{% endif %}></textarea>
+                {% if permission_level in ['admin', 'staff'] %}
+                    <div class="modal-footer">
+                        <button type="submit">Save Note</button>
+                        <button type="button" onclick="closeNoteModal()">Cancel</button>
+                    </div>
+                {% else %}
+                    <div class="modal-footer">
+                        <button type="button" onclick="closeNoteModal()">Close</button>
+                    </div>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    <script>
+    function showAddNote(entryId) {
+        document.getElementById('noteModalTitle').textContent = 'Add Note';
+        document.getElementById('note_entry_id').value = entryId;
+        document.getElementById('noteContent').value = '';
+        document.getElementById('noteModal').style.display = 'block';
+    }
+
+    function showEditNote(entryId) {
+        document.getElementById('noteModalTitle').textContent = 'Edit Note';
+        document.getElementById('note_entry_id').value = entryId;
+        
+        fetch(`/get_note/${entryId}`)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('noteContent').value = data.content;
+                document.getElementById('noteModal').style.display = 'block';
+            });
+    }
+
+    function viewNote(entryId) {
+        document.getElementById('noteModalTitle').textContent = 'View Note';
+        document.getElementById('note_entry_id').value = entryId;
+        
+        fetch(`/get_note/${entryId}`)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('noteContent').value = data.content;
+                document.getElementById('noteModal').style.display = 'block';
+            });
+    }
+
+    function saveNote(event) {
+        event.preventDefault();
+        const entryId = document.getElementById('note_entry_id').value;
+        const content = document.getElementById('noteContent').value;
+        
+        if (!content.trim()) {
+            alert('Please enter a note before saving.');
+            return;
+        }
+
+        fetch('/add_note', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                entry_id: entryId,
+                content: content
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                closeNoteModal();
+                location.reload();  // Reload to show the updated note status
+            } else {
+                alert('Error saving note: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error saving note. Please try again.');
+        });
+    }
+
+    function closeNoteModal() {
+        document.getElementById('noteModal').style.display = 'none';
+    }
+    </script>
+
+    <style>
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.5);
+    }
+
+    .modal-content {
+        background-color: #fefefe;
+        margin: 15% auto;
+        padding: 20px;
+        border: 1px solid #888;
+        width: 60%;
+        max-width: 600px;
+        border-radius: 5px;
+    }
+
+    #noteContent {
+        width: 100%;
+        margin: 10px 0;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        resize: vertical;
+    }
+
+    .modal-footer {
+        margin-top: 15px;
+        text-align: right;
+    }
+
+    .modal-footer button {
+        margin-left: 10px;
+        padding: 8px 16px;
+        border-radius: 4px;
+        border: none;
+        cursor: pointer;
+    }
+    </style>
 </body>
 </html>

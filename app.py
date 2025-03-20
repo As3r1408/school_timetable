@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from flask import Flask, jsonify, render_template, request, redirect, url_for, session, flash
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import db, User, Timetable, SchoolSettings, Room, Subject, AssignedSubject, user_timetable
+from models import db, User, Timetable, SchoolSettings, Room, Subject, AssignedSubject, user_timetable, Note
 
 app = Flask(__name__)
 
@@ -684,6 +684,43 @@ def get_subject_teachers(subject_id):
         'id': teacher.id,
         'username': teacher.username
     } for teacher in teachers if teacher])
+
+@app.route('/add_note', methods=['POST'])
+def add_note():
+    if 'user_id' not in session or session['role'] not in ['admin', 'staff']:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    try:
+        data = request.get_json()
+        entry_id = data.get('entry_id')
+        content = data.get('content')
+        
+        entry = Timetable.query.get_or_404(entry_id)
+        
+        if entry.note:
+            # Update existing note
+            entry.note.content = content
+            entry.note.updated_at = datetime.utcnow()
+        else:
+            # Create new note
+            note = Note(timetable_id=entry_id, content=content)
+            db.session.add(note)
+        
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Note saved successfully'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/get_note/<int:entry_id>')
+def get_note(entry_id):
+    entry = Timetable.query.get_or_404(entry_id)
+    if entry.note:
+        return jsonify({
+            'content': entry.note.content,
+            'updated_at': entry.note.updated_at.strftime('%Y-%m-%d %H:%M')
+        })
+    return jsonify({'error': 'No note found'}), 404
 
 # Ensure this is at the bottom
 if __name__ == "__main__":
